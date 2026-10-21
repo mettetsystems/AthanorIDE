@@ -460,7 +460,7 @@ NODE_CATALOG: tuple[NodeCatalogEntry, ...] = (
         display_name="Agentic Harness",
         category="big-blocks",
         version="1.0.0",
-        description="Agentic Harness assembles an opinionated agent loop (Pi, Goose, OpenHarness, Omnigents, or Archcon) with tools and MCP servers on the canvas. Require a PROMPT goal; optionally attach TOOL_DEFINITION and MCP_SERVER ports (multiple allowed). The run port emits EVENT for lifecycle telemetry, and result provides optional STRING completion signals for downstream consumers.",
+        description="Agentic Harness assembles an opinionated agent loop (OpenCode, OpenClaw, OpenHands, Goose, Open Interpreter, AURA, Pi, OMP, Aider, OpenHarness, Omnigents, or Archcon) with tools and MCP servers on the canvas. Require a PROMPT goal; optionally attach TOOL_DEFINITION and MCP_SERVER ports (multiple allowed). The run port emits EVENT for lifecycle telemetry, and result provides optional STRING completion signals for downstream consumers.",
         icon="bot",
         required_config=(
             "harness",

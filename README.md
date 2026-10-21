@@ -33,7 +33,7 @@ The application keeps the **project → palette → canvas → inspector → val
 | Guardrails | Phrase, tool, and result-length checks the exported agent enforces |
 | Model Endpoint | A full Chat Completions-compatible endpoint and its exact model ID |
 | API Tool / Custom API Block | An HTTP endpoint exposed as a tool with JSON Schema arguments |
-| Harness adapters | Call deployed LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI, or OpenClaw Enterprise endpoints |
+| Harness adapters | Call deployed LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI, OpenClaw Enterprise, OpenCode, OpenClaw, OpenHands, Goose, Open Interpreter, AURA, Pi, OMP, or Aider endpoints |
 | Sandbox policies | Sandbox Policy, plus Rootless Podman, Docker, gVisor, Kata Containers, Firecracker, or OpenShell |
 | MCP Server Builder | Publish connected tools, static text resources, and prompt templates |
 | MCP Connection / MCP Package / Command | Connect selected tools from an HTTP or stdio MCP server |
@@ -102,7 +102,15 @@ The stock API image has no nested Podman runtime or persistent vault volume. Use
 
 ### Deploy AthanorIDE itself to OpenShift
 
-The deployment in [deploy/openshift-ide](deploy/openshift-ide/) runs AthanorIDE's web app, API, and OpenShift OAuth proxy sidecar together in a namespace-scoped pod. It is separate from **Export → OpenShift**, which generates manifests for a workflow designed in the IDE. See [the application deployment guide](deploy/openshift-ide/README.md) for image builds, OAuth secret creation, namespace setup, and Route access.
+The manifests in [deploy/openshift-ide](deploy/openshift-ide/) run the web app, API, and OpenShift OAuth proxy together in one pod. This is separate from **Export → OpenShift**, which writes a workflow archive. From the repository root, after `oc login`:
+
+```bash
+make openshift-ide-deploy
+```
+
+That script checks for Quay or the OpenShift internal image registry before it builds. If neither is available, it stops and asks you to enable the internal registry. When one is available, it builds the web and API images, pushes them there, and applies the manifests. Details are in [the application deployment guide](deploy/openshift-ide/README.md).
+
+`make openshift-ide-apply` only runs `oc apply -k deploy/openshift-ide`. Use it when the images and `athanoride-oauth` secret already exist.
 
 On Linux, rootless Podman is the default local agent option. On macOS, start your Podman machine or Docker engine before running exports. On Windows, use a WSL2 Linux environment for the Bash/Make workflow. gVisor, Kata, and Firecracker need suitable Linux hosts and their own runtime setup. OpenShell needs its CLI and a selected gateway.
 
@@ -258,7 +266,7 @@ Install the resulting tarball using your normal npm workflow. The executable nam
 
 Build `Containerfile.agent`, push the image to a registry reachable by the cluster, and update the generated image reference, preferably to an immutable digest. Create the credentials Secret named by the generated deployment, using the keys in `agent.env.example`. Helm exposes `image`, `credentialsSecret`, and `namePrefix` in `values.yaml`; use a distinct `namePrefix` for multiple releases in one namespace.
 
-For Helm, replace `my-workflow` with the exported project slug:
+Run the Helm commands inside the extracted export, not in this repository. Replace `my-workflow` with the exported project slug. The chart is `deploy/helm/<project-slug>/`, with `Chart.yaml`, `values.yaml`, and `templates/workload.yaml`:
 
 ```bash
 helm lint deploy/helm/my-workflow
@@ -267,11 +275,11 @@ helm template my-workflow deploy/helm/my-workflow
 helm upgrade --install my-workflow deploy/helm/my-workflow
 ```
 
-For OpenShift, edit the image reference in the workload file first:
+The OpenShift export writes `deploy/openshift/workload.yaml` and `deploy/openshift/README.md` in that archive. From `deploy/openshift` in the archive, after editing the image reference:
 
 ```bash
-oc apply --dry-run=server -f deploy/openshift/workload.yaml
-oc apply -f deploy/openshift/workload.yaml
+oc apply --dry-run=server -f workload.yaml
+oc apply -f workload.yaml
 ```
 
 Read the deployment README in the archive before applying. Agent/harness graphs run as one-shot Jobs with no automatic retries. Server-only graphs produce MCP Deployments and ClusterIP Services. In graphs containing agents and MCP builders, the Job runs the agent graph; it does not separately publish those servers.
@@ -369,6 +377,7 @@ packages/contracts/             Graph JSON Schema, Zod schemas, TypeScript types
 packages/node-definitions/      Block ports, forms, defaults, and documentation
 packages/ui/                    Shared UI primitives
 scripts/                        Setup, development, containers, catalog synchronization
+deploy/openshift-ide/           Kustomize manifests for running this IDE on OpenShift
 docs/                           Current agent guide and architecture/design history
 examples/                       Earlier pipeline examples (not current agent starters)
 ```
@@ -383,6 +392,8 @@ make typecheck        # TypeScript and mypy
 make test             # Vitest and Pytest
 make podman-up        # Build/start the IDE in Podman
 make podman-down      # Stop the IDE containers
+make openshift-ide-deploy # Build into Quay or the internal registry, then deploy
+make openshift-ide-apply  # oc apply -k deploy/openshift-ide
 ```
 
 For direct workspace commands, use the PATH setup above if pnpm/uv were bootstrapped locally:

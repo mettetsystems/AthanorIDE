@@ -18,6 +18,15 @@ describe("node definitions catalog", () => {
     expect(types).toContain("big_blocks.agentic_harness");
     expect(types).toContain("big_blocks.video_chunking_ic_lora");
     expect(types).toContain("harness.openclaw_enterprise");
+    expect(types).toContain("harness.opencode");
+    expect(types).toContain("harness.openclaw");
+    expect(types).toContain("harness.openhands");
+    expect(types).toContain("harness.goose");
+    expect(types).toContain("harness.open_interpreter");
+    expect(types).toContain("harness.aura");
+    expect(types).toContain("harness.pi");
+    expect(types).toContain("harness.omp");
+    expect(types).toContain("harness.aider");
     expect(types).toContain("sandbox.openshell");
     expect(types).toContain("sandbox.policy");
     expect(types).toContain("agent.guardrails");
@@ -25,7 +34,7 @@ describe("node definitions catalog", () => {
     expect(types).toContain("big_blocks.postgres_pgvector");
     expect(types).toContain("big_blocks.guardrail_builder");
     expect(types).toContain("enterprise.primary_vector_dbs");
-    expect(types).toHaveLength(64);
+    expect(types).toHaveLength(73);
   });
 
   it("creates a text input node with STRING output", () => {
@@ -100,6 +109,9 @@ describe("node definitions catalog", () => {
     expect(gateway.configuration.useCustomTemplate).toBe(false);
     const harness = createNodeFromDefinition("big_blocks.agentic_harness", { x: 0, y: 0 });
     expect(harness.configuration.harness).toBe("goose");
+    expect(getNodeDefinition("big_blocks.agentic_harness")?.configurationFields.find((field) => field.key === "harness")?.options).toEqual(
+      expect.arrayContaining(["opencode", "openclaw", "openhands", "goose", "open_interpreter", "aura", "pi", "omp", "aider"]),
+    );
     const webMd = createNodeFromDefinition("big_blocks.web_to_markdown", { x: 0, y: 0 });
     expect(webMd.configuration.openSourceStack).toBe("markitdown");
     expect(webMd.outputs[0]?.contractType).toBe("STRING");

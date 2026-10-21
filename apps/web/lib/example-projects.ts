@@ -87,7 +87,7 @@ function buildHarness(): ArchitectureGraph {
   const sandbox = createNodeFromDefinition("sandbox.podman", { x: 20, y: 320 });
   const harness = createNodeFromDefinition("harness.langgraph", { x: 380, y: 60 });
   const output = createNodeFromDefinition("foundation.output_viewer", { x: 740, y: 60 });
-  return stampProject("Agent harness", "Connect a deployed harness through a configurable request/response endpoint. Swap in one of five framework adapters.", [task, sandbox, harness, output], [
+  return stampProject("Agent harness", "Connect a deployed harness through a configurable request/response endpoint. Swap the harness block for another adapter in the palette.", [task, sandbox, harness, output], [
     edge("task-harness", task, "text", harness, "task"), edge("sandbox-harness", sandbox, "sandbox", harness, "sandbox"),
     edge("harness-output", harness, "result", output, "text"),
   ]);

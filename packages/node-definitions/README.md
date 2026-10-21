@@ -9,7 +9,7 @@ Declarative catalog of canvas nodes: ports, configuration fields, documentation,
 | Category | Prefix | Blocks |
 | --- | --- | --- |
 | Agents | `agent.*` | Sandboxed Agent, Guardrails, Model Endpoint, API Tool, Custom API Block |
-| Harnesses | `harness.*` | LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI, OpenClaw Enterprise endpoint adapters |
+| Harnesses | `harness.*` | LangGraph, OpenAI Agents SDK, Google ADK, PydanticAI, CrewAI, OpenClaw Enterprise, OpenCode, OpenClaw, OpenHands, Goose, Open Interpreter, AURA, Pi, OMP, and Aider endpoint adapters |
 | Sandboxes | `sandbox.*` | Sandbox Policy, plus Podman, Docker, gVisor, Kata, Firecracker blueprint, OpenShell |
 | MCP | `mcp.*` | Server Builder, Connection, Package / Command, Resource, Prompt |
 | Foundation | Selected `foundation.*` | Text Input, JSON Input, Prompt Template, Output Viewer |

@@ -11,10 +11,10 @@ resources:
   - network-policy.yaml
 images:
   - name: athanoride-web
-    newName: registry.example.com/athanoride/athanoride-web
+    newName: image-registry.openshift-image-registry.svc:5000/athanoride/athanoride-web
     newTag: latest
   - name: athanoride-api
-    newName: registry.example.com/athanoride/athanoride-api
+    newName: image-registry.openshift-image-registry.svc:5000/athanoride/athanoride-api
     newTag: latest
   - name: athanoride-oauth-proxy
     newName: quay.io/openshift/origin-oauth-proxy

@@ -123,11 +123,13 @@ requires an MCP-aware authorization gateway and explicit host/origin configurati
 ## Harness alternatives
 
 The harness blocks are endpoint adapters for LangGraph, OpenAI Agents SDK, Google ADK,
-PydanticAI, CrewAI, and OpenClaw Enterprise. They POST a configurable task field and read
+PydanticAI, CrewAI, OpenClaw Enterprise, OpenCode, OpenClaw, OpenHands, Goose,
+Open Interpreter, AURA, Pi, OMP, and Aider. They POST a configurable task field and read
 a configurable string response field. A deployed harness endpoint or wrapper is required.
 Native framework SDK scaffolds, remote approvals, checkpoints, and isolation are owned by
 that service. OpenClaw Enterprise does not deploy an OCC Agent or generate its
-configuration. These are curated alternatives, not a claimed popularity ranking.
+configuration. OpenClaw calls a deployed Gateway and does not install that gateway.
+These are curated alternatives, not a claimed popularity ranking.
 
 Agent exports include `CUSTOM_HARNESS.md`, a versioned JSON request/response contract, and
 a runnable stdlib reference adapter at `app/customer_harness.py`. Replace `run_task` to
@@ -167,5 +169,5 @@ References used for the design:
 - [Generic registry API](https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/api/generic-registry-api.md).
 - [MCP Python SDK](https://py.sdk.modelcontextprotocol.io/) and [MCP transports](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports).
 - [Podman run](https://docs.podman.io/en/latest/markdown/podman-run.1.html), [Docker rootless](https://docs.docker.com/engine/security/rootless/), [gVisor](https://gvisor.dev/docs/user_guide/quick_start/docker/), [Kata](https://katacontainers.io/), [Firecracker](https://firecracker-microvm.github.io/).
-- [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview), [OpenAI Agents SDK](https://developers.openai.com/api/docs/guides/agents/sdk), [Google ADK](https://adk.dev/), [PydanticAI](https://ai.pydantic.dev/), [CrewAI](https://docs.crewai.com/).
+- [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview), [OpenAI Agents SDK](https://developers.openai.com/api/docs/guides/agents/sdk), [Google ADK](https://adk.dev/), [PydanticAI](https://ai.pydantic.dev/), [CrewAI](https://docs.crewai.com/), [OpenCode](https://opencode.ai/docs), [OpenClaw](https://docs.openclaw.ai/), [OpenHands](https://docs.openhands.dev/), [Goose](https://goose-docs.ai/), [Open Interpreter](https://docs.openinterpreter.com/), [AURA](https://github.com/ARPAHLS/aura), [Pi](https://pi.dev/), [OMP](https://omp.sh/), [Aider](https://aider.chat/).
 - [Helm charts](https://helm.sh/docs/topics/charts/) and [npm package metadata](https://docs.npmjs.com/files/package.json/).

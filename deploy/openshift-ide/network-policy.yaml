@@ -18,19 +18,8 @@ spec:
       ports:
         - protocol: TCP
           port: 4180
+  # Allow egress. OVN does not match the Kubernetes ClusterIP (172.30.0.1:443)
+  # with an ipBlock or host-network selector, so a port-limited rule leaves the
+  # OAuth proxy unable to reach the API and the Route returns 403.
   egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: openshift-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-      ports:
-        - protocol: TCP
-          port: 443
+    - {}

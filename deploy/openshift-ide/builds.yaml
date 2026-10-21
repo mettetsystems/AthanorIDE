@@ -1,0 +1,68 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: athanoride-web
+  namespace: athanoride
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: athanoride-api
+  namespace: athanoride
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: athanoride-web
+  namespace: athanoride
+spec:
+  successfulBuildsHistoryLimit: 1
+  failedBuildsHistoryLimit: 1
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+      buildArgs:
+        - name: NEXT_PUBLIC_API_BASE_URL
+          value: ""
+        - name: ATHANOR_INTERNAL_API_URL
+          value: http://127.0.0.1:8000
+  resources:
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 6Gi
+  output:
+    to:
+      kind: ImageStreamTag
+      name: athanoride-web:latest
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: athanoride-api
+  namespace: athanoride
+spec:
+  successfulBuildsHistoryLimit: 1
+  failedBuildsHistoryLimit: 1
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: deploy/openshift-ide/Containerfile.api
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  output:
+    to:
+      kind: ImageStreamTag
+      name: athanoride-api:latest

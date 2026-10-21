@@ -280,7 +280,7 @@ Best for environmental or event detection rather than speech transcription — a
 
 ### Agentic Harness (`big_blocks.agentic_harness`)
 
-Agentic Harness assembles an opinionated agent loop (Pi, Goose, OpenHarness, Omnigents, or Archcon) with tools and MCP servers on the canvas. Require a PROMPT goal; optionally attach TOOL_DEFINITION and MCP_SERVER ports (multiple allowed). The run port emits EVENT for lifecycle telemetry, and result provides optional STRING completion signals for downstream consumers.
+Agentic Harness assembles an opinionated agent loop (OpenCode, OpenClaw, OpenHands, Goose, Open Interpreter, AURA, Pi, OMP, Aider, OpenHarness, Omnigents, or Archcon) with tools and MCP servers on the canvas. Require a PROMPT goal; optionally attach TOOL_DEFINITION and MCP_SERVER ports (multiple allowed). The run port emits EVENT for lifecycle telemetry, and result provides optional STRING completion signals for downstream consumers.
 
 Use when you need a full tool-using agent rather than a single model call or atomic Agent node. Keep local-first runtimes and opt into Docker, Kubernetes, or hyperscaler targets via URI plus secret name when required. Pair harness selection with a companion OSS framework and override behavior via the bottom template. Big Blocks are lineage and export only — Run does not launch the harness in the IDE.
 

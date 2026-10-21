@@ -1065,6 +1065,771 @@
     "exportKind": "agent_studio"
   },
   {
+    "type": "harness.opencode",
+    "displayName": "OpenCode Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Open-source terminal, desktop, and IDE coding agent",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for OpenCode. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://opencode.ai/docs",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.openclaw",
+    "displayName": "OpenClaw Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Self-hosted gateway from chat apps to a coding agent",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for OpenClaw. Point the endpoint at a deployed OpenClaw Gateway. This block does not install the gateway or generate its configuration. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://docs.openclaw.ai/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.openhands",
+    "displayName": "OpenHands Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Software agent SDK and server for code tasks",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for OpenHands. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://docs.openhands.dev/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.goose",
+    "displayName": "Goose Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Local agent with MCP extensions, recipes, and ACP",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for Goose. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://goose-docs.ai/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.open_interpreter",
+    "displayName": "Open Interpreter Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Terminal agent that runs code on your machine",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for Open Interpreter. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://docs.openinterpreter.com/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.aura",
+    "displayName": "AURA Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Runtime coat for audit, policy, and compliance around an agent loop",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for AURA. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://github.com/ARPAHLS/aura",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.pi",
+    "displayName": "Pi Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Minimal extensible coding-agent harness",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for Pi. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://pi.dev/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.omp",
+    "displayName": "OMP Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Oh My Pi coding agent with IDE tools built in",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for OMP. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://omp.sh/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
+    "type": "harness.aider",
+    "displayName": "Aider Harness",
+    "category": "harnesses",
+    "icon": "git-fork",
+    "description": "Git-native pair programming in the terminal",
+    "inputs": [
+      {
+        "name": "task",
+        "direction": "input",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "sandbox",
+        "direction": "input",
+        "contractType": "SANDBOX_RUNTIME",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "direction": "output",
+        "contractType": "STRING",
+        "required": true,
+        "multiple": false
+      },
+      {
+        "name": "events",
+        "direction": "output",
+        "contractType": "EVENT",
+        "required": true,
+        "multiple": false
+      }
+    ],
+    "configurationFields": [
+      {
+        "key": "endpoint",
+        "label": "Deployed harness endpoint",
+        "description": "A POST endpoint wrapping your deployed harness. This is not the framework's native API; see the contract below.",
+        "defaultValue": "https://agents.example.com/run",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "inputKey",
+        "label": "Task request field",
+        "description": "Top-level JSON field that receives the connected task.",
+        "defaultValue": "input",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "outputKey",
+        "label": "Result response field",
+        "description": "Top-level string field to read from the JSON response.",
+        "defaultValue": "output",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "key": "timeoutSeconds",
+        "label": "Run timeout (seconds)",
+        "description": "Bound the request to the deployed harness.",
+        "defaultValue": 120,
+        "required": true,
+        "type": "number"
+      },
+      {
+        "key": "secretName",
+        "label": "API key environment variable",
+        "description": "Name only, e.g. MODEL_API_KEY. Set its value in the runtime environment.",
+        "defaultValue": "",
+        "required": false,
+        "type": "string",
+        "advanced": true
+      }
+    ],
+    "documentation": "Endpoint adapter for Aider. Export sends {input: task} and reads {output: text}; field names are configurable. Your deployed harness owns models, tools, checkpoints, approvals, and its own isolation. The local sandbox isolates only the HTTP adapter. Framework SDK code is not generated. These are curated alternatives, not a market-share ranking. Documentation: https://aider.chat/",
+    "version": "1.0.0",
+    "exportKind": "agent_studio"
+  },
+  {
     "type": "sandbox.policy",
     "displayName": "Sandbox Policy",
     "category": "sandboxes",

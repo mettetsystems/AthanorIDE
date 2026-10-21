@@ -217,9 +217,11 @@ Resources are static text; prompts substitute a required task argument.
 ## Harness adapters and extension
 
 Endpoint adapters are included for LangGraph, OpenAI Agents SDK, Google ADK,
-PydanticAI, CrewAI, and OpenClaw Enterprise. These are curated alternatives, not a
+PydanticAI, CrewAI, OpenClaw Enterprise, OpenCode, OpenClaw, OpenHands, Goose,
+Open Interpreter, AURA, Pi, OMP, and Aider. These are curated alternatives, not a
 popularity ranking. OpenClaw Enterprise calls your deployed control-plane endpoint;
 it does not deploy an OCC Agent or generate native OpenClaw configuration.
+OpenClaw calls a deployed Gateway and does not install that gateway.
 They send `{input: task}` and expect `{output: text}` by default; field names are
 configurable. An existing deployed endpoint or a wrapper around the framework is
 required. The selected framework's native SDK is not generated or installed.

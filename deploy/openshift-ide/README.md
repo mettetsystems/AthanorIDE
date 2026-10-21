@@ -14,37 +14,29 @@ passes through the authenticated Route.
 
 The deployment uses OpenShift Route v1, a namespaced ServiceAccount, the 4.20
 OAuth proxy image, restricted non-root container settings, and a NetworkPolicy
-that admits the OpenShift router and allows DNS plus HTTPS egress. The proxy
+that admits the OpenShift router and allows pod egress. Egress stays open because the OAuth proxy must reach the Kubernetes API service, and a port-limited rule does not match that ClusterIP on OVN. The proxy
 requires users to have `get` permission on the `athanoride` Service in this
 namespace. Grant access through namespace RBAC; the generated manifest does not
 grant broad user permissions.
 
-## 1. Build and push the application images
+## 1. Build the application images
 
-Build two images from the repository root. Replace `REGISTRY` with a registry
-your cluster can pull from, then push both images:
+From the repository root, with `oc` logged in:
 
 ```bash
-REGISTRY=quay.io
-IMAGE_NAMESPACE=YOUR_ORG
-VERSION=latest
-
-podman build -f Containerfile --target api \
-  -t "$REGISTRY/$IMAGE_NAMESPACE/athanoride-api:$VERSION" .
-podman build -f Containerfile --target web \
-  --build-arg NEXT_PUBLIC_API_BASE_URL= \
-  --build-arg ATHANOR_INTERNAL_API_URL=http://127.0.0.1:8000 \
-  -t "$REGISTRY/$IMAGE_NAMESPACE/athanoride-web:$VERSION" .
-
-podman login "$REGISTRY"
-podman push "$REGISTRY/athanoride-api:$VERSION"
-podman push "$REGISTRY/athanoride-web:$VERSION"
+make openshift-ide-deploy
 ```
 
-Edit the `images` entries in `kustomization.yaml` to match the pushed image
-names and tags. If the registry is private, create an image pull secret in the
-namespace and attach it to the `athanoride-auth` ServiceAccount before applying
-the Deployment.
+`scripts/deploy-openshift-ide.sh` checks for a registry before it builds:
+
+1. Quay, when `QUAY_REGISTRY`, `QUAY_NAMESPACE`, `QUAY_USER`, and `QUAY_PASSWORD` (or `QUAY_TOKEN`) are set. A Quay registry already installed on the cluster supplies the hostname when `QUAY_NAMESPACE` and those credentials are set.
+2. The OpenShift internal image registry, when its management state is `Managed` or `Unmanaged` and the `image-registry` deployment is ready.
+
+If neither is available, the script stops and prints how to enable the internal registry. On an interactive terminal it asks whether to enable that registry and continue. It does not start a build until a destination exists. It then builds both images on the cluster, pushes them to the selected registry, creates the OAuth cookie secret when it is missing, and applies the manifests.
+
+`./scripts/deploy-openshift-ide.sh --check` only prints which registry it would use.
+
+The web build sets `NEXT_PUBLIC_API_BASE_URL` empty so the browser calls the Route, and `ATHANOR_INTERNAL_API_URL=http://127.0.0.1:8000` so the web container proxies `/api` to the API container in the same pod. The steps below are what the script does; use them only when you want to repeat one part by hand.
 
 ## 2. Create the namespace and OAuth cookie secret
 

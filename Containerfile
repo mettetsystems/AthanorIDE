@@ -81,5 +81,6 @@ RUN chgrp -R 0 /repo/apps/web/.next && chmod -R g=u /repo/apps/web/.next
 USER node
 
 EXPOSE 3000
-WORKDIR /repo
-CMD ["pnpm", "--filter", "@athanor/web", "start"]
+WORKDIR /repo/apps/web
+ENV HOME=/tmp
+CMD ["node", "node_modules/next/dist/bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]
