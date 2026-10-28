@@ -3,6 +3,7 @@ name = "athanor-api"
 version = "0.1.0"
 description = "AthanorIDE FastAPI control plane"
 readme = "README.md"
+license = "Apache-2.0"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.0",

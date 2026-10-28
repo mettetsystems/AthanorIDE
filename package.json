@@ -1,6 +1,7 @@
 {
   "name": "athanor-ide",
   "private": true,
+  "license": "Apache-2.0",
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "pnpm --parallel --filter @athanor/web --filter @athanor/contracts dev",

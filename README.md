@@ -1,5 +1,7 @@
 # AthanorIDE
 
+[Apache License 2.0](LICENSE) · SPDX: `Apache-2.0`
+
 <p align="center">
   <img src="docs/assets/logo.jpg" alt="AthanorIDE logo" width="280" />
 </p>
@@ -54,6 +56,7 @@ All tabs are available to everyone. **Run preview** displays planned stages and 
 - [Configuration and troubleshooting](#configuration-and-troubleshooting)
 - [Development and repository layout](#development-and-repository-layout)
 - [Documentation](#documentation)
+- [License](#license)
 
 ## What you can build
 
@@ -533,3 +536,9 @@ Core API routes are `GET /api/v1/health`, `GET /api/v1/node-definitions`, and `P
 | [UI package README](packages/ui/README.md) | Shared UI package |
 | [Architecture](docs/architecture.md), [three-role ADR](docs/decisions/0012-three-role-workflow.md), [all ADRs](docs/decisions/README.md) | Project model, workflow execution contracts, and design decisions |
 | [Security model](docs/security-model.md), [earlier node catalog](docs/node-catalog.md), [development plan](docs/development-plan.md) | Retained compiler/vault details and historical modules; use the user and agent guides for current role and export behavior |
+
+## License
+
+AthanorIDE is licensed under the **Apache License, Version 2.0** (`Apache-2.0`). See [LICENSE](LICENSE) for the full terms.
+
+AthanorIDE is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. Third-party dependencies retain their respective licenses.
