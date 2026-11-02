@@ -11,10 +11,39 @@ from pydantic import BaseModel, Field
 from athanor_api.assistant.ask import answer_question
 from athanor_api.assistant.draft import AssistantError, DraftError, generate_draft
 from athanor_api.assistant.token import require_assistant_token
+from athanor_api.model_endpoints import EndpointInfo, discover_endpoints, probe_endpoint
 from athanor_api.vault.routes import require_loopback
 
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
 Loopback = Annotated[None, Depends(require_loopback)]
+DISCOVERY_LIMITER = anyio.CapacityLimiter(2)
+
+
+class DiscoverRequest(BaseModel):
+    endpoint: str = Field(default="", max_length=2048)
+    use_token: bool = Field(default=False, alias="useToken")
+
+
+@router.post("/endpoints")
+async def discover_model_endpoints(
+    body: DiscoverRequest, _: Loopback
+) -> dict[str, list[EndpointInfo]]:
+    endpoint = body.endpoint.strip()
+    try:
+        if body.use_token and not endpoint:
+            raise HTTPException(status_code=400, detail="Choose an endpoint before using a token.")
+        token = require_assistant_token() if body.use_token else ""
+        if endpoint:
+            result = await anyio.to_thread.run_sync(
+                lambda: probe_endpoint(endpoint, token=token, timeout=3), limiter=DISCOVERY_LIMITER
+            )
+            return {"items": [result] if result else []}
+        results = await anyio.to_thread.run_sync(discover_endpoints, limiter=DISCOVERY_LIMITER)
+        return {"items": results}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AssistantError as exc:
+        _raise_assistant(exc)
 
 
 class AssistantWorkflow(BaseModel):

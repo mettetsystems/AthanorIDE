@@ -1,8 +1,10 @@
 """Download integrity and service-file safety regressions; no GPU or network needed."""
 
+import argparse
 import hashlib
 import importlib.util
 import io
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -135,6 +137,214 @@ class ModelSetupTests(unittest.TestCase):
         self.assertEqual(target.read_text(), "legacy")
         self.assertFalse(unit.is_symlink())
         self.assertFalse(setup.atomic_write(unit, "managed"))
+
+
+class EndpointReuseTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.path = Path(self.directory.name) / "model-endpoint.json"
+        self.args = argparse.Namespace(
+            endpoint=None,
+            model=None,
+            api_key_env=None,
+            port=8081,
+            new_instance=False,
+            dry_run=False,
+        )
+        self.candidate = {
+            "base_url": "http://127.0.0.1:8000/v1",
+            "endpoint": "http://127.0.0.1:8000/v1/chat/completions",
+            "models": ["existing-model"],
+            "status": "ready",
+            "detail": "",
+            "useToken": False,
+        }
+        for mocked in (
+            patch.object(setup, "discover_endpoints", return_value=[self.candidate]),
+            patch.object(setup, "config_path", return_value=self.path),
+        ):
+            mocked.start()
+            self.addCleanup(mocked.stop)
+
+    def test_accept_reuses_before_systemd_gpu_runtime_or_download(self):
+        with (
+            patch.object(setup.sys.stdin, "isatty", return_value=True),
+            patch("builtins.input", return_value=""),
+            patch.object(setup, "run") as run,
+            patch.object(setup, "ensure_model") as download,
+            patch.object(setup, "runtime_command") as runtime,
+        ):
+            setup.install(self.args)
+        run.assert_not_called()
+        download.assert_not_called()
+        runtime.assert_not_called()
+        config = json.loads(self.path.read_text())
+        self.assertEqual(config["model"], "existing-model")
+        self.assertFalse(config["managed"])
+        self.assertNotIn("service", config)
+
+    def test_decline_does_not_fall_through_to_launch(self):
+        with (
+            patch.object(setup.sys.stdin, "isatty", return_value=True),
+            patch("builtins.input", return_value="n"),
+            patch.object(setup, "run") as run,
+            self.assertRaisesRegex(RuntimeError, "cancelled"),
+        ):
+            setup.install(self.args)
+        run.assert_not_called()
+        self.assertFalse(self.path.exists())
+
+    def test_noninteractive_never_silently_launches_a_second_model(self):
+        with (
+            patch.object(setup.sys.stdin, "isatty", return_value=False),
+            self.assertRaisesRegex(RuntimeError, "Existing endpoints found"),
+        ):
+            setup.install(self.args)
+
+    def test_custom_authenticated_endpoint_preserves_model_and_never_saves_token(self):
+        self.args.endpoint = "https://models.example/proxy/v1"
+        self.args.api_key_env = "TEST_MODEL_TOKEN"
+        self.args.model = "second"
+        self.candidate["models"].append("second")
+        self.candidate["useToken"] = True
+        with (
+            patch.dict(setup.os.environ, {"TEST_MODEL_TOKEN": "secret-value"}),
+            patch.object(setup, "probe_endpoint", return_value=self.candidate) as probe,
+        ):
+            self.assertTrue(setup.reuse_endpoint(self.args))
+        probe.assert_called_once_with(
+            self.args.endpoint, token="secret-value", timeout=5
+        )
+        self.assertNotIn("secret-value", self.path.read_text())
+        self.assertTrue(json.loads(self.path.read_text())["useToken"])
+        self.assertEqual(json.loads(self.path.read_text())["model"], "second")
+
+    def test_multiple_models_require_explicit_noninteractive_selection(self):
+        self.args.endpoint = self.candidate["base_url"]
+        self.candidate["models"].append("second")
+        with (
+            patch.object(setup, "probe_endpoint", return_value=self.candidate),
+            patch.object(setup.sys.stdin, "isatty", return_value=False),
+            self.assertRaisesRegex(RuntimeError, "Multiple models"),
+        ):
+            setup.reuse_endpoint(self.args)
+        self.assertFalse(self.path.exists())
+
+    def test_unreachable_explicit_endpoint_never_launches(self):
+        self.args.endpoint = "http://127.0.0.1:9000"
+        with (
+            patch.object(setup, "probe_endpoint", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "supplied endpoint"),
+        ):
+            setup.install(self.args)
+
+    def test_auth_required_or_loading_endpoint_prevents_launch(self):
+        for status in ("auth_required", "unavailable"):
+            with self.subTest(status=status):
+                self.candidate.update(status=status, models=[])
+                with (
+                    patch.object(setup.sys.stdin, "isatty", return_value=True),
+                    patch("builtins.input", return_value="y"),
+                    self.assertRaisesRegex(RuntimeError, "No model started"),
+                ):
+                    setup.install(self.args)
+
+    def test_dry_run_does_not_prompt_or_write(self):
+        self.args.dry_run = True
+        with patch("builtins.input") as prompt:
+            self.assertTrue(setup.reuse_endpoint(self.args))
+        prompt.assert_not_called()
+        self.assertFalse(self.path.exists())
+
+    def test_new_instance_is_explicit_opt_in(self):
+        self.args.new_instance = True
+        self.assertFalse(setup.reuse_endpoint(self.args))
+
+    def test_endpoint_or_gpu_process_appearing_during_download_prevents_service_write(
+        self,
+    ):
+        self.args.gpu = None
+        self.args.allow_busy_gpu = False
+        self.args.llama_bin = None
+        self.args.model_dir = Path(self.directory.name)
+        self.args.download = False
+        for late_endpoint in (True, False):
+            with (
+                self.subTest(late_endpoint=late_endpoint),
+                patch.dict(setup.os.environ, {"XDG_CONFIG_HOME": self.directory.name}),
+                patch.object(setup.os, "geteuid", return_value=1000),
+                patch.object(
+                    setup,
+                    "discover_endpoints",
+                    side_effect=[[], [self.candidate] if late_endpoint else []],
+                ),
+                patch.object(setup, "choose_gpu", return_value=("GPU-test", "GPU")),
+                patch.object(
+                    setup,
+                    "check_gpu_available",
+                    side_effect=[None, RuntimeError("GPU became busy")],
+                ) as check_gpu,
+                patch.object(
+                    setup, "runtime_command", return_value=["/bin/llama-server"]
+                ),
+                patch.object(setup, "run", return_value="") as run,
+                patch.object(
+                    setup.subprocess,
+                    "run",
+                    return_value=argparse.Namespace(returncode=3),
+                ),
+                patch.object(setup.socket, "create_connection", side_effect=OSError),
+                patch.object(setup, "ensure_model"),
+                patch.object(setup, "atomic_write") as write,
+                self.assertRaisesRegex(
+                    RuntimeError, "appeared during setup|GPU became busy"
+                ),
+            ):
+                setup.install(self.args)
+            write.assert_not_called()
+            run.assert_called_once_with(
+                ["systemctl", "--user", "show", "--property=Version"]
+            )
+            self.assertEqual(check_gpu.call_count, 1 if late_endpoint else 2)
+
+    def test_gpu_selection_uses_free_memory(self):
+        with patch.object(
+            setup,
+            "run",
+            return_value="0, GPU-busy, 2000, Big GPU\n1, GPU-free, 12000, Small GPU",
+        ) as run:
+            self.assertEqual(setup.choose_gpu(None), ("GPU-free", "Small GPU"))
+        self.assertIn("--query-gpu=index,uuid,memory.free,name", run.call_args.args[0])
+
+    def test_busy_gpu_blocks_before_runtime_even_without_a_detected_endpoint(self):
+        self.args.gpu = None
+        self.args.allow_busy_gpu = False
+        with (
+            patch.object(setup, "discover_endpoints", return_value=[]),
+            patch.object(setup.os, "geteuid", return_value=1000),
+            patch.object(setup, "choose_gpu", return_value=("GPU-test", "GPU")),
+            patch.object(
+                setup, "run", side_effect=["", "GPU-test, 123, python, 24000"]
+            ),
+            patch.object(setup, "runtime_command") as runtime,
+            self.assertRaisesRegex(RuntimeError, "already has compute processes"),
+        ):
+            setup.install(self.args)
+        runtime.assert_not_called()
+
+    def test_busy_override_still_checks_free_memory_and_ignores_other_gpus(self):
+        with (
+            patch.object(
+                setup, "run", side_effect=["GPU-test, 123, python, 24000", "1024"]
+            ),
+            self.assertRaisesRegex(RuntimeError, "8192 MiB"),
+        ):
+            setup.check_gpu_available("GPU-test", allow_busy=True)
+        with patch.object(
+            setup, "run", side_effect=["GPU-other, 123, python, 24000", "10000"]
+        ):
+            setup.check_gpu_available("GPU-test", allow_busy=False)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ help:
 	@echo "AthanorIDE Make targets:"
 	@echo "  make install       Bootstrap tools and install dependencies"
 	@echo "  make install-macos Guided macOS setup for Intel and Apple Silicon Macs"
-	@echo "  make setup-model-endpoint Set up the cached Qwen2.5-7B CUDA model service (Linux)"
+	@echo "  make setup-model-endpoint Reuse an existing endpoint or set up local Qwen2.5-7B (Linux)"
 	@echo "  make dev           Run API + web for local development"
 	@echo "  make stop          Stop API + web processes from this checkout"
 	@echo "  make lint          Lint TypeScript and Python"
@@ -61,6 +61,7 @@ typecheck: bootstrap-tools
 test: bootstrap-tools
 	@$(PNPM) test
 	@$(UV) run --directory "$(ROOT_DIR)/apps/api" pytest -q
+	@python3 -m unittest discover -s "$(ROOT_DIR)/scripts/tests" -q
 
 podman-up:
 	@bash "$(ROOT_DIR)/scripts/podman-up.sh"

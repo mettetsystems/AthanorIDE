@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set up AthanorIDE's local Qwen2.5-7B-Instruct endpoint on Linux with NVIDIA CUDA."""
+"""Reuse an OpenAI-compatible endpoint or set up local Qwen2.5-7B on Linux/NVIDIA."""
 
 from __future__ import annotations
 
@@ -19,6 +19,14 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+# The discovery helper has no third-party dependencies; setup works before make install.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps/api"))
+from athanor_api.model_endpoints import (
+    config_path,
+    discover_endpoints,
+    probe_endpoint,
+)
 
 MODEL_ID = "qwen2.5-7b-instruct"
 MODEL_REPO = "Qwen/Qwen2.5-7B-Instruct-GGUF"
@@ -129,7 +137,7 @@ def choose_gpu(selection: str | None) -> tuple[str, str]:
     output = run(
         [
             "nvidia-smi",
-            "--query-gpu=index,uuid,memory.total,name",
+            "--query-gpu=index,uuid,memory.free,name",
             "--format=csv,noheader,nounits",
         ]
     )
@@ -144,6 +152,156 @@ def choose_gpu(selection: str | None) -> tuple[str, str]:
         )
     _, gpu_uuid, _, name = max(devices, key=lambda device: int(device[2]))
     return gpu_uuid, name
+
+
+def check_gpu_available(gpu_uuid: str, *, allow_busy: bool, own_pid: str = "") -> None:
+    output = run(
+        [
+            "nvidia-smi",
+            "--query-compute-apps=gpu_uuid,pid,process_name,used_gpu_memory",
+            "--format=csv,noheader,nounits",
+        ]
+    )
+    busy = [
+        row
+        for row in csv.reader(io.StringIO(output))
+        if len(row) >= 4 and row[0].strip() == gpu_uuid and row[1].strip() != own_pid
+    ]
+    if busy and not allow_busy:
+        details = "; ".join(f"PID {row[1].strip()} ({row[2].strip()})" for row in busy)
+        raise RuntimeError(
+            f"GPU already has compute processes: {details}. Reuse their endpoint, choose "
+            "another --gpu, or explicitly pass --allow-busy-gpu to accept the OOM risk."
+        )
+    free = int(
+        run(
+            [
+                "nvidia-smi",
+                "--id=" + gpu_uuid,
+                "--query-gpu=memory.free",
+                "--format=csv,noheader,nounits",
+            ]
+        ).strip()
+    )
+    # A conservative floor for the fixed 7B Q4 / 32K service, not an OOM guarantee.
+    # An unchanged running service isn't loading a second copy of its weights.
+    if not own_pid and free < 8192:
+        raise RuntimeError(
+            f"Only {free} MiB VRAM is free; local setup requires at least 8192 MiB. "
+            "Reuse an existing endpoint or free GPU memory first."
+        )
+
+
+def select_number(prompt: str, count: int) -> int:
+    while True:
+        value = input(prompt).strip()
+        if value.isdigit() and 1 <= int(value) <= count:
+            return int(value) - 1
+        print(f"Enter a number from 1 to {count}.")
+
+
+def reuse_endpoint(args: argparse.Namespace) -> bool:
+    """Return true when reuse (or its dry run) handles setup, before CUDA/systemd work."""
+    token = ""
+    if args.api_key_env:
+        token = os.environ.get(args.api_key_env, "").strip()
+        if not token:
+            raise RuntimeError(f"Environment variable {args.api_key_env} is empty.")
+    if args.endpoint:
+        selected = probe_endpoint(args.endpoint, token=token, timeout=5)
+        if selected is None:
+            raise RuntimeError(
+                "The supplied endpoint did not return an OpenAI-compatible model list."
+            )
+        candidates = [selected]
+    else:
+        print("Checking for existing OpenAI-compatible model servers...", flush=True)
+        candidates = discover_endpoints([f"http://127.0.0.1:{args.port}/v1"])
+    if not candidates:
+        return False
+    print("Existing or possible model endpoints:")
+    for index, candidate in enumerate(candidates, 1):
+        print(
+            f"  {index}. {candidate['base_url']} — {', '.join(candidate['models']) or candidate['detail']}"
+        )
+    if args.new_instance:
+        print(
+            "New instance explicitly requested; checking GPU availability before launch."
+        )
+        return False
+    if args.dry_run:
+        print(
+            "Dry run: reuse is available. No model will be started or configuration changed."
+        )
+        return True
+    if not args.endpoint:
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                "Existing endpoints found. Rerun interactively to choose one, or supply "
+                "--endpoint URL [--model ID]. Use --new-instance only to request another model."
+            )
+        if input("Use an existing model endpoint? [Y/n] ").strip().lower() not in {
+            "",
+            "y",
+            "yes",
+        }:
+            raise RuntimeError(
+                "Setup cancelled; no model started. Use --new-instance to launch another model."
+            )
+    selected = candidates[
+        0
+        if len(candidates) == 1
+        else select_number("Endpoint number: ", len(candidates))
+    ]
+    if selected["status"] != "ready":
+        raise RuntimeError(
+            f"{selected['detail']} Retry with --endpoint URL --api-key-env VARIABLE for "
+            "authentication, or wait for the server to finish loading. No model started."
+        )
+    models = selected["models"]
+    if args.model:
+        if args.model not in models:
+            raise RuntimeError(
+                "The requested --model is not advertised by this endpoint."
+            )
+        model = args.model
+    elif len(models) == 1:
+        model = models[0]
+    else:
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                "Multiple models advertised; supply --model with an exact model ID."
+            )
+        for index, model_id in enumerate(models, 1):
+            print(f"  {index}. {model_id}")
+        model = models[select_number("Model number: ", len(models))]
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with (path.parent / "model-endpoint.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        atomic_write(
+            path,
+            json.dumps(
+                {
+                    "endpoint": selected["endpoint"],
+                    "base_url": selected["base_url"],
+                    "model": model,
+                    "useToken": selected["useToken"],
+                    "managed": False,
+                },
+                indent=2,
+            )
+            + "\n",
+        )
+    print(f"Reusing {selected['endpoint']}\nModel ID: {model}\nConfig: {path}")
+    print(
+        "No model downloaded or started. Select this endpoint in Assistant settings and save."
+    )
+    if selected["useToken"]:
+        print(
+            "Enable Use API token and store the token in the local vault; setup did not save it."
+        )
+    return True
 
 
 def runtime_command(binary: str | None, gpu_uuid: str) -> list[str]:
@@ -368,6 +526,8 @@ def service_owns_port(port: int) -> bool:
 
 
 def install(args: argparse.Namespace) -> None:
+    if reuse_endpoint(args):
+        return
     if sys.platform != "linux":
         raise RuntimeError(
             "This setup script requires Linux, NVIDIA CUDA, and systemd --user."
@@ -376,6 +536,7 @@ def install(args: argparse.Namespace) -> None:
         raise RuntimeError("Run this script as your desktop user, without sudo.")
     run(["systemctl", "--user", "show", "--property=Version"])
     gpu_uuid, gpu_name = choose_gpu(args.gpu)
+    check_gpu_available(gpu_uuid, allow_busy=args.allow_busy_gpu)
     command = runtime_command(args.llama_bin, gpu_uuid)
     model = args.model_dir.expanduser().resolve() / MODEL_FILENAME
     config_home = Path(
@@ -424,6 +585,31 @@ def install(args: argparse.Namespace) -> None:
         # would prevent llama.cpp from locating the second shard.
         for filename in MODEL_FILES:
             ensure_model(model.parent / filename, no_download=not args.download)
+        # Downloads can take a long time. Recheck immediately before enabling/starting.
+        if not args.new_instance and discover_endpoints(
+            [f"http://127.0.0.1:{args.port}/v1"]
+        ):
+            raise RuntimeError(
+                "An endpoint appeared during setup. No model started; rerun to choose reuse."
+            )
+        own_pid = ""
+        if (
+            active
+            and unit.exists()
+            and unit.read_text() == unit_text
+            and service_owns_port(args.port)
+        ):
+            own_pid = run(
+                [
+                    "systemctl",
+                    "--user",
+                    "show",
+                    "--property=MainPID",
+                    "--value",
+                    SERVICE,
+                ]
+            ).strip()
+        check_gpu_available(gpu_uuid, allow_busy=args.allow_busy_gpu, own_pid=own_pid)
         changed = atomic_write(unit, unit_text)
         run(["systemctl", "--user", "daemon-reload"])
         # Also migrate the previous setup's enable symlink from the checkout.
@@ -518,10 +704,29 @@ def main() -> int:
         help="CUDA-enabled llama or llama-server executable (default: discover existing runtime)",
     )
     parser.add_argument(
-        "--gpu", help="NVIDIA GPU index or UUID (default: GPU with the most total VRAM)"
+        "--gpu", help="NVIDIA GPU index or UUID (default: GPU with the most free VRAM)"
     )
     parser.add_argument(
         "--port", type=int, default=8081, help="Loopback listener port (default: 8081)"
+    )
+    endpoint_mode = parser.add_mutually_exclusive_group()
+    endpoint_mode.add_argument(
+        "--endpoint", help="Reuse a server URL, API base URL, or chat completions URL"
+    )
+    endpoint_mode.add_argument(
+        "--new-instance",
+        action="store_true",
+        help="Explicitly request a local instance even if endpoints exist",
+    )
+    parser.add_argument("--model", help="Exact advertised model ID to reuse")
+    parser.add_argument(
+        "--api-key-env",
+        help="Environment variable holding the existing server's token (never saved)",
+    )
+    parser.add_argument(
+        "--allow-busy-gpu",
+        action="store_true",
+        help="Accept sharing the selected GPU with other compute processes",
     )
     download = parser.add_mutually_exclusive_group()
     download.add_argument(
@@ -550,12 +755,22 @@ def main() -> int:
     args = parser.parse_args()
     if not 1024 <= args.port <= 65535:
         parser.error("--port must be between 1024 and 65535")
+    if args.api_key_env and not args.endpoint:
+        parser.error(
+            "--api-key-env requires --endpoint so credentials go only to the chosen server"
+        )
+    if args.model and not args.endpoint:
+        parser.error("--model requires --endpoint")
+    if args.check_only and (args.endpoint or args.new_instance or args.allow_busy_gpu):
+        parser.error(
+            "--check-only tests the managed local service on --port; omit reuse/launch options"
+        )
     try:
         if args.check_only:
             check_endpoint(args.port)
         else:
             install(args)
-    except (OSError, RuntimeError, ValueError, KeyError, IndexError) as error:
+    except (OSError, RuntimeError, ValueError, KeyError, IndexError, EOFError) as error:
         print(f"Setup failed: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

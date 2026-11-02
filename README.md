@@ -339,6 +339,50 @@ The API reads `ATHANOR_*` settings and a `.env` file relative to its working dir
 | `ATHANOR_IMAGE` | Exported launcher image override, not the IDE API image |
 | `ATHANOR_PYTHON` | npm-export Python executable override |
 
+### Reuse an existing model endpoint
+
+Open **Assistant settings** (the gear under search). It checks for existing
+OpenAI-compatible servers and asks **Use an existing model endpoint?** Select a
+model, click **Use this endpoint**, then **Save**. Project Maya, vLLM, llama.cpp,
+and other servers exposing the OpenAI model-list and Chat Completions APIs can
+be reused. Discovery only requests model metadata; it does not run inference,
+download weights, or load a model. Models explicitly reported as unloaded or
+loading are not offered for reuse.
+
+Discovery checks the machine running the API, using common ports (8081, 8080,
+8000, 5000, 5001, 1234, 11434, 1337, 9931), the saved setup URL, and Linux
+loopback/wildcard TCP listeners. For remote hosts, HTTPS, containers on another
+host, or custom API prefixes, enter the URL and click **Check this URL**. A server
+root, `/v1` base URL, or full Chat Completions URL is accepted by the check.
+Authenticated servers require **Use API token** and a token saved in the unlocked
+local vault. Broad discovery never sends a token; an authenticated check sends
+it only to the URL you explicitly check. A model list does not verify chat or
+tool-calling support, which depends on the model and server configuration.
+
+Command-line setup performs the same discovery **before** checking CUDA,
+downloading weights, or modifying a service:
+
+```bash
+make setup-model-endpoint
+
+# Reuse a specific server without an interactive prompt.
+python3 scripts/setup-model-endpoint.py \
+  --endpoint http://127.0.0.1:8080/v1 --model YOUR_ADVERTISED_MODEL_ID
+
+# For a protected server, reference an existing environment variable.
+python3 scripts/setup-model-endpoint.py \
+  --endpoint https://models.example/proxy/v1 --model YOUR_ADVERTISED_MODEL_ID \
+  --api-key-env MODEL_API_KEY
+```
+
+Accepting reuse saves connection details in `~/.config/athanor/model-endpoint.json`
+(or under `XDG_CONFIG_HOME`) without starting, stopping, or taking ownership of
+the existing server. Tokens are never saved there. Select the endpoint in
+Assistant settings to apply it to the browser. Declining reuse cancels setup;
+noninteractive setup also stops when servers are found unless `--endpoint` or
+`--new-instance` was supplied. Authentication-required, empty, and temporarily
+unavailable model lists prevent an automatic second launch too.
+
 ### Set up the local Qwen2.5-7B-Instruct endpoint (Linux/NVIDIA)
 
 With Python 3.10+, a working NVIDIA driver, a user systemd session, and a recent
@@ -351,9 +395,18 @@ make setup-model-endpoint
 The [setup script](scripts/setup-model-endpoint.py) reuses the official cached
 Qwen2.5-7B-Instruct Q4_K_M GGUF (two shards, 4.7 GB total), verifies both pinned
 SHA-256 checksums, selects the NVIDIA
-GPU with the most total VRAM, and enables `athanor-model.service` for your user
+GPU with the most free VRAM, and enables `athanor-model.service` for your user
 session. Its defaults match the tested RTX 5090 setup: loopback port 8081, a 32K
 context, native tool calling, and up to 4,096 output tokens.
+
+Local setup checks for other compute processes on the selected GPU and requires
+at least 8,192 MiB of free VRAM for the fixed configuration. It rechecks endpoints
+and GPU availability after preparing the weights, before enabling the service.
+Use `--new-instance` to explicitly request a local service when endpoints already
+exist. Sharing a GPU with another compute process additionally requires
+`--allow-busy-gpu`; the free-memory check still applies. These are preflight
+checks, not a memory reservation or an OOM guarantee: other applications can
+allocate memory later, and an enabled service can start again at login.
 
 The script first checks `/run/media/<user>/model-repo/llm-models/Qwen2.5-7B-Instruct-GGUF`,
 then the Hugging Face cache for revision `bb5d59e06d9551d752d08b292a50eb208b07ab1f`.
@@ -366,7 +419,7 @@ if needed. The script does not install drivers or runtimes and rejects a runtime
 that cannot use CUDA.
 
 ```bash
-# Preview prerequisites and the generated service without making changes.
+# Preview discovery, or local prerequisites/service if no endpoint is found.
 python3 scripts/setup-model-endpoint.py --dry-run
 
 # Override the local paths, GPU index (or UUID), and port; prevent downloads.
@@ -383,8 +436,8 @@ journalctl --user -u athanor-model -f
 ```
 
 Optional downloads resume when rerun with `--download`. Existing files with a mismatched
-checksum are preserved and rejected. Re-running setup keeps an unchanged healthy
-service running. The model service is separate from `make dev` / `make stop`;
+checksum are preserved and rejected. Re-running setup offers to reuse an existing
+healthy endpoint. The model service is separate from `make dev` / `make stop`;
 its runtime and model files must remain available. Connection details are saved
 in `~/.config/athanor/model-endpoint.json` (or under `XDG_CONFIG_HOME`).
 

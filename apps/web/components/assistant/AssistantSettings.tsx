@@ -3,9 +3,10 @@
 /**
  * Endpoint preferences and optional write-only vault authentication.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ASSISTANT_TOKEN_NAME, assistantTokenStatus } from "@/lib/assistant";
+import { discoverModelEndpoints, type ModelEndpoint } from "@/lib/model-endpoints";
 import { fetchVaultStatus, listVaultEntries, putVaultEntry } from "@/lib/vault";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 
@@ -27,6 +28,37 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
   const [stored, setStored] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [endpoints, setEndpoints] = useState<ModelEndpoint[]>([]);
+  const [discovering, setDiscovering] = useState(true);
+  const [discoveryMessage, setDiscoveryMessage] = useState("");
+  const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
+  const discoveryController = useRef<AbortController | null>(null);
+
+  const discover = async (url = "", withToken = false) => {
+    discoveryController.current?.abort();
+    const controller = new AbortController();
+    discoveryController.current = controller;
+    setDiscovering(true);
+    setDiscoveryMessage("");
+    setEndpoints([]);
+    try {
+      const found = await discoverModelEndpoints(url, withToken, controller.signal);
+      if (controller.signal.aborted) return;
+      setEndpoints(found);
+      if (!found.length) setDiscoveryMessage("No compatible model list found. Enter a server URL to check it, or configure the endpoint manually.");
+    } catch (err: unknown) {
+      if (!controller.signal.aborted) {
+        setDiscoveryMessage(err instanceof Error ? err.message : "Could not check existing endpoints.");
+      }
+    } finally {
+      if (!controller.signal.aborted) setDiscovering(false);
+    }
+  };
+
+  useEffect(() => {
+    void discover();
+    return () => discoveryController.current?.abort();
+  }, []);
 
   useEffect(() => {
     setEndpointDraft(endpoint);
@@ -85,12 +117,54 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
 
   return (
     <form
-      className="z-30 mt-1 w-full max-w-xs space-y-2 rounded border border-[var(--athanor-mist)] bg-white p-3 text-sm shadow"
+      className="absolute right-0 z-30 mt-1 max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] space-y-2 overflow-y-auto rounded border border-[var(--athanor-mist)] bg-white p-3 text-sm shadow"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
+      <div className="space-y-2 rounded bg-slate-50 p-2">
+        <p className="font-medium">Use an existing model endpoint?</p>
+        <p className="text-xs text-[var(--athanor-slate)]">
+          Reuse Project Maya, vLLM, llama.cpp, or another OpenAI-compatible server to avoid loading another model.
+          Checks list models without running inference. Local discovery checks the machine running the API.
+        </p>
+        <button type="button" disabled={discovering} className="text-xs underline disabled:opacity-50" onClick={() => void discover()}>
+          {discovering ? "Checking existing endpoints…" : "Check local servers again"}
+        </button>
+        <p role="status" className="text-xs text-[var(--athanor-slate)]">{discoveryMessage}</p>
+        {endpoints.map((candidate) => (
+          <div key={candidate.endpoint} className="space-y-1 border-t border-slate-200 pt-2">
+            <p className="break-all text-xs font-medium">{candidate.base_url}</p>
+            <p className="text-xs">{candidate.detail}</p>
+            {candidate.models.length > 0 && (
+              <select
+                aria-label={`Model at ${candidate.base_url}`}
+                className="w-full rounded border border-[var(--athanor-mist)] p-1 text-xs"
+                value={candidate.models.includes(selectedModels[candidate.endpoint] ?? "") ? selectedModels[candidate.endpoint] : candidate.models[0]}
+                onChange={(event) => setSelectedModels((previous) => ({ ...previous, [candidate.endpoint]: event.target.value }))}
+              >
+                {candidate.models.map((id) => <option key={id} value={id}>{id}</option>)}
+              </select>
+            )}
+            {candidate.status !== "unavailable" && (
+              <button type="button" className="text-xs underline" onClick={() => {
+                const selection = selectedModels[candidate.endpoint];
+                setEndpointDraft(candidate.endpoint);
+                setModelDraft(selection && candidate.models.includes(selection) ? selection : candidate.models[0] ?? "");
+                setUseTokenDraft(candidate.useToken || (candidate.endpoint === endpoint && useToken));
+                setTokenDraft("");
+                setError(null);
+                setMessage(candidate.status === "auth_required"
+                  ? "Save the server token in the local vault, then check this URL again."
+                  : "Existing endpoint selected. Click Save to use it.");
+              }}>
+                {candidate.status === "auth_required" ? "Configure authentication" : "Use this endpoint"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
       <label className="block space-y-1">
         <span className="font-medium">Chat completions endpoint</span>
         <input
@@ -102,6 +176,14 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
           autoComplete="off"
         />
       </label>
+      <button
+        type="button"
+        disabled={discovering || !endpointDraft.trim()}
+        className="text-xs underline disabled:opacity-50"
+        onClick={() => void discover(endpointDraft.trim(), useTokenDraft)}
+      >
+        Check this URL{useTokenDraft ? " with saved vault token" : ""}
+      </button>
       <label className="block space-y-1">
         <span className="font-medium">Model ID</span>
         <input
