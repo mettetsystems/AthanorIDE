@@ -341,6 +341,23 @@ The API reads `ATHANOR_*` settings and a `.env` file relative to its working dir
 
 ### Reuse an existing model endpoint
 
+At API startup, Athanor checks Project Maya at `http://127.0.0.1:8080/v1/models`
+with a one-second request timeout before accepting requests. When Maya advertises
+an available model, the web app automatically selects its chat completions endpoint
+and model before showing the editor, without requiring an API token. This takes
+priority over the previously selected assistant endpoint on launch. If Maya is
+absent, still loading, or requires authentication, existing preferences remain in
+place. The check only lists models; it never starts a model or generates text.
+Loopback refers to the machine (or container) running the API. You can change the
+selection afterward in assistant settings. The startup result is cached until the
+API restarts. If Maya starts later, use **Check local servers again** and save its
+endpoint, or restart the API and reload the web app. This configures the in-app
+assistant; workflow model blocks retain their own configuration. See the
+[assistant model settings guide](docs/user-guide.md#assistant-model-settings) for
+model selection, authentication, timeouts, and troubleshooting, and the
+[API documentation](apps/api/README.md#project-maya-startup-detection) for the
+startup response contract.
+
 Open **Assistant settings** (the gear under search). It checks for existing
 OpenAI-compatible servers and asks **Use an existing model endpoint?** Select a
 model, click **Use this endpoint**, then **Save**. Project Maya, vLLM, llama.cpp,

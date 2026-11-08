@@ -29,3 +29,14 @@ export async function discoverModelEndpoints(
   }
   return z.object({ items: z.array(EndpointSchema) }).parse(await response.json()).items;
 }
+
+/** Read the Maya probe completed by the API before it accepted requests. */
+export async function fetchStartupModelEndpoint(signal?: AbortSignal): Promise<ModelEndpoint | null> {
+  const response = await fetch(`${getApiBaseUrl()}/api/v1/assistant/startup-endpoint`, {
+    signal,
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`Startup endpoint check failed (${response.status}).`);
+  const { items } = z.object({ items: z.array(EndpointSchema) }).parse(await response.json());
+  return items.find((item) => item.status === "ready" && item.models.length > 0) ?? null;
+}

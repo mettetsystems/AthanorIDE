@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any, NoReturn
 
 import anyio
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from athanor_api.assistant.ask import answer_question
@@ -17,6 +17,12 @@ from athanor_api.vault.routes import require_loopback
 router = APIRouter(prefix="/api/v1/assistant", tags=["assistant"])
 Loopback = Annotated[None, Depends(require_loopback)]
 DISCOVERY_LIMITER = anyio.CapacityLimiter(2)
+
+
+@router.get("/startup-endpoint")
+async def startup_model_endpoint(request: Request, _: Loopback) -> dict[str, list[EndpointInfo]]:
+    endpoint = getattr(request.app.state, "startup_model_endpoint", None)
+    return {"items": [endpoint] if endpoint else []}
 
 
 class DiscoverRequest(BaseModel):

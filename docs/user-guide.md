@@ -46,7 +46,43 @@ Instruction overrides are review warnings and do not require approval. Missing r
 
 ## Assistant model settings
 
-The gear under the search field saves the chat-completions URL and model ID as a browser preference. They are not part of the project and are not exported. The token field is write-only: Save stores `ATHANOR_ASSISTANT_TOKEN` in the local vault and clears the field. Unlock the vault from **Local vault** before saving a token. A locked vault stops the assistant before any model request.
+Athanor automatically checks Project Maya when the API starts. Start Maya first,
+with its OpenAI-compatible model API at `http://127.0.0.1:8080/v1/models`, then
+start Athanor. Before showing the editor, the web app reads that startup result
+and selects `http://127.0.0.1:8080/v1/chat/completions` when a model is available.
+It keeps your previously selected model if it belongs to this endpoint and is
+still advertised; otherwise it selects the first available model. This overrides
+a previously saved assistant endpoint and turns **Use API token** off because
+the startup check succeeds without credentials.
+
+If Maya is absent, loading, requires authentication, or returns no available
+models, your existing assistant preferences remain unchanged. The API probe has
+a one-second request timeout; the browser waits up to three seconds for the API
+startup result, then opens the editor even if that request fails. The probe only
+lists models and does not start Maya, download weights, or run inference.
+
+The gear under the search field saves the chat-completions URL and model ID as a
+browser preference. You can change the automatic selection there for the current
+session; reopening the app reapplies the API's startup result. These preferences
+are not part of the project and are not exported. The token field is write-only:
+Save stores `ATHANOR_ASSISTANT_TOKEN` in the local vault and clears the field.
+Unlock the vault from **Local vault** before saving a token. A locked vault stops
+the assistant before any model request only when **Use API token** is enabled.
+
+If Maya was started after Athanor, open the gear, click **Check local servers
+again**, choose its model, click **Use this endpoint**, then **Save**. Alternatively,
+restart the API and reload the web app to repeat automatic selection. The startup
+result is cached for the API process lifetime; it is not a continuous health check.
+If Maya stops later, assistant requests can fail until you restart Maya or select
+another endpoint.
+
+For a protected Maya server, enable **Use API token**, save its token in the
+unlocked vault, and use **Check this URL with saved vault token**. For a remote
+server or container deployment, enter an address reachable from the API:
+`127.0.0.1` always means the API's own host or container. Automatic selection
+configures the in-app assistant; model blocks in workflows and exported projects
+still need their own endpoint configuration. A successful model-list check does
+not guarantee inference or tool-calling support.
 
 The API also serves these catalog and draft tools at `http://127.0.0.1:8000/assistant/mcp` for a local MCP client. `list_blocks` and `describe_block` expose catalog ports and required fields. `draft_architecture` uses the same validation as **Build draft**. Placeholder endpoints and secret names are allowed; secret values are rejected.
 

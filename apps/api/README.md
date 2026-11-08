@@ -18,6 +18,8 @@ Or use `make dev` to start API + web together.
 | URL | Purpose |
 | --- | --- |
 | `GET /api/v1/health` | Liveness |
+| `GET /api/v1/assistant/startup-endpoint` | Cached ready Maya endpoint from startup; loopback-only |
+| `POST /api/v1/assistant/endpoints` | On-demand OpenAI-compatible endpoint discovery or explicit URL probe; loopback-only |
 | `GET /api/v1/node-definitions` | Current agent and retained legacy catalog summaries |
 | `POST /api/v1/projects/validate` | `design` or `deployment` validation profile (default deployment) |
 | `POST /api/v1/projects/handoff` | Deterministic SME workflow/build-brief ZIP; no implementation required |
@@ -27,6 +29,50 @@ Or use `make dev` to start API + web together.
 | `POST /api/v1/compiler/validate` | Validate generated transform |
 | `/api/v1/vault/*` | Local vault status, initialization, locking, entry management, coverage, and explicit environment materialization |
 | `/docs` | OpenAPI UI |
+
+## Project Maya startup detection
+
+The FastAPI lifespan probes `http://127.0.0.1:8080/v1/models` in a worker thread
+before accepting requests, with a one-second request timeout. It sends no token,
+does not follow redirects, and does not request a completion. Only a compatible
+model list containing an available model is selected. Authentication errors,
+loading/unavailable responses, empty lists, malformed responses, and connection
+failures leave the startup selection empty and allow startup to continue.
+
+`GET /api/v1/assistant/startup-endpoint` returns the cached selection:
+
+```json
+{
+  "items": [{
+    "base_url": "http://127.0.0.1:8080/v1",
+    "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+    "models": ["example-advertised-model-id"],
+    "status": "ready",
+    "detail": "Model list available; inference has not been tested.",
+    "useToken": false
+  }]
+}
+```
+
+When Maya was not ready, the response is `{"items": []}`. This route uses the
+same loopback access restriction as assistant discovery. Reading it does not
+probe Maya again. Restart the API to refresh the startup result, or use
+`POST /api/v1/assistant/endpoints` for on-demand discovery in assistant settings.
+The API logs `Project Maya startup check: available` or
+`Project Maya startup check: not ready; keeping configured endpoint`.
+
+The web app consumes this result before displaying the editor, with a three-second
+fetch timeout. A ready Maya endpoint takes precedence over saved assistant
+preferences; an empty result or API failure preserves them. The selected model is
+the previous model for that same endpoint if still advertised, otherwise the first
+available model. This configures browser assistant preferences, not workflow model
+blocks, exported runtimes, or legacy compiler settings. The startup result can
+become stale if Maya stops or its model list changes.
+
+Loopback refers to the API process network namespace. If Maya runs on a container
+host or another machine, configure its reachable address manually in assistant
+settings. See the [assistant user guide](../../docs/user-guide.md#assistant-model-settings)
+for authentication, late startup, and manual overrides.
 
 ## Agent validation, preview, and export
 

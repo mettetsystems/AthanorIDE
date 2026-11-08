@@ -32,6 +32,7 @@ from athanor_api.marketplace import (
     MarketplaceTopic,
     refresh_marketplace,
 )
+from athanor_api.model_endpoints import probe_endpoint
 from athanor_api.schemas.api import (
     AuditRecordModel,
     CompilerGenerateRequest,
@@ -95,6 +96,19 @@ def _install_assistant_mount(parent: FastAPI) -> None:
 
 @asynccontextmanager
 async def app_lifespan(parent: FastAPI) -> AsyncIterator[None]:
+    # Complete the read-only Maya check before accepting requests.
+    maya = await anyio.to_thread.run_sync(
+        partial(probe_endpoint, "http://127.0.0.1:8080/v1", timeout=1.0)
+    )
+    parent.state.startup_model_endpoint = (
+        maya if maya and maya["status"] == "ready" else None
+    )
+    logger.info(
+        "Project Maya startup check: %s",
+        "available"
+        if parent.state.startup_model_endpoint
+        else "not ready; keeping configured endpoint",
+    )
     _install_assistant_mount(parent)
     mounted = next(
         route

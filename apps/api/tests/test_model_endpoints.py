@@ -201,3 +201,22 @@ def test_discovery_route_rejects_nonlocal_clients():
         )
     assert response.status_code == 403
     discover.assert_not_called()
+
+
+@pytest.mark.parametrize("status", ["ready", "unavailable", "auth_required", None])
+def test_startup_checks_maya_before_serving_and_only_selects_ready_models(status):
+    maya = {
+        "base_url": "http://127.0.0.1:8080/v1",
+        "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+        "models": ["maya-model"] if status == "ready" else [],
+        "status": status,
+        "detail": "",
+        "useToken": False,
+    } if status else None
+    with patch("athanor_api.main.probe_endpoint", return_value=maya) as probe:
+        with TestClient(app, client=("127.0.0.1", 50000)) as client:
+            probe.assert_called_once_with("http://127.0.0.1:8080/v1", timeout=1.0)
+            response = client.get("/api/v1/assistant/startup-endpoint")
+            assert response.status_code == 200
+            assert response.json() == {"items": [maya] if status == "ready" else []}
+            assert client.get("/api/v1/health").status_code == 200
