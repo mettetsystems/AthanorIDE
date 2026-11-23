@@ -5,7 +5,18 @@
  * Graphs keep secret names only; values never enter project-store.
  */
 import { useCallback, useEffect, useState } from "react";
-import { Lock, LockOpen, Shield, Trash2, X } from "lucide-react";
+import {
+  Alert,
+  Button,
+  Card,
+  CardBody,
+  Form,
+  FormGroup,
+  Label,
+  TextInput,
+  Title,
+} from "@patternfly/react-core";
+import { LockIcon, LockOpenIcon, ShieldAltIcon, TimesIcon, TrashIcon } from "@patternfly/react-icons";
 
 import {
   collectLocalSecretNames,
@@ -88,103 +99,91 @@ export function LocalVaultPanel({
   };
 
   return (
-    <aside
-      className="flex h-full flex-col gap-3 overflow-auto bg-white/90 p-4"
-      aria-label="Local secrets vault"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <Shield className="h-4 w-4" aria-hidden />
-            Local vault
-          </h2>
-          <p className="mt-1 text-xs text-[var(--athanor-slate)]">
-            Store secret <strong className="font-medium">values</strong> encrypted on this machine
-            for local runs. Graphs keep secret <strong className="font-medium">names</strong> only.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="rounded p-1 text-[var(--athanor-slate)] hover:bg-[var(--athanor-mist)]"
-          onClick={onClose}
-          aria-label="Close local vault"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
+    <aside aria-label="Local secrets vault">
+      <Title headingLevel="h2">
+        <ShieldAltIcon /> Local vault
+      </Title>
+      <Button variant="plain" aria-label="Close local vault" icon={<TimesIcon />} onClick={onClose} />
+      <p>
+        Store secret values encrypted on this machine for local runs. Graphs keep secret names only.
+      </p>
       {status && (
-        <p className="text-xs text-[var(--athanor-slate)]">
+        <p>
           {status.exists ? (status.unlocked ? "Unlocked" : "Locked") : "Not initialized"}
           {status.unlocked && status.entryCount != null ? ` · ${status.entryCount} secret(s)` : ""}
         </p>
       )}
-
       {!status?.exists && (
-        <div className="space-y-2 rounded border border-[var(--athanor-mist)] p-3">
-          <p className="text-xs text-[var(--athanor-slate)]">
-            Create a passphrase-protected vault (min 8 characters). There is no recovery if lost.
-          </p>
-          <input
-            type="password"
-            autoComplete="new-password"
-            className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-            placeholder="Passphrase"
-            value={passphrase}
-            onChange={(event) => setPassphrase(event.target.value)}
-          />
-          <button
-            type="button"
-            disabled={busy || passphrase.length < 8}
-            className="inline-flex w-full items-center justify-center gap-1 rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white disabled:opacity-40"
-            onClick={() =>
-              void run(async () => {
-                await initVault(passphrase);
-                setPassphrase("");
-                setMessage("Vault created and unlocked.");
-              })
-            }
-          >
-            <LockOpen className="h-3.5 w-3.5" />
-            Initialize vault
-          </button>
-        </div>
+        <Card>
+          <CardBody>
+            <Form>
+              <p>Create a passphrase-protected vault (min 8 characters). There is no recovery if lost.</p>
+              <FormGroup label="Passphrase" fieldId="vault-init-passphrase">
+                <TextInput
+                  id="vault-init-passphrase"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Passphrase"
+                  value={passphrase}
+                  onChange={(_event, value) => setPassphrase(value)}
+                />
+              </FormGroup>
+              <Button
+                variant="primary"
+                icon={<LockOpenIcon />}
+                isDisabled={busy || passphrase.length < 8}
+                onClick={() =>
+                  void run(async () => {
+                    await initVault(passphrase);
+                    setPassphrase("");
+                    setMessage("Vault created and unlocked.");
+                  })
+                }
+              >
+                Initialize vault
+              </Button>
+            </Form>
+          </CardBody>
+        </Card>
       )}
-
       {status?.exists && !status.unlocked && (
-        <div className="space-y-2 rounded border border-[var(--athanor-mist)] p-3">
-          <input
-            type="password"
-            autoComplete="current-password"
-            className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-            placeholder="Passphrase"
-            value={passphrase}
-            onChange={(event) => setPassphrase(event.target.value)}
-          />
-          <button
-            type="button"
-            disabled={busy || !passphrase}
-            className="inline-flex w-full items-center justify-center gap-1 rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white disabled:opacity-40"
-            onClick={() =>
-              void run(async () => {
-                await unlockVault(passphrase);
-                setPassphrase("");
-                setMessage("Vault unlocked.");
-              })
-            }
-          >
-            <LockOpen className="h-3.5 w-3.5" />
-            Unlock
-          </button>
-        </div>
+        <Card>
+          <CardBody>
+            <Form>
+              <FormGroup label="Passphrase" fieldId="vault-unlock-passphrase">
+                <TextInput
+                  id="vault-unlock-passphrase"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Passphrase"
+                  value={passphrase}
+                  onChange={(_event, value) => setPassphrase(value)}
+                />
+              </FormGroup>
+              <Button
+                variant="primary"
+                icon={<LockOpenIcon />}
+                isDisabled={busy || !passphrase}
+                onClick={() =>
+                  void run(async () => {
+                    await unlockVault(passphrase);
+                    setPassphrase("");
+                    setMessage("Vault unlocked.");
+                  })
+                }
+              >
+                Unlock
+              </Button>
+            </Form>
+          </CardBody>
+        </Card>
       )}
-
       {status?.unlocked && (
         <>
-          <button
-            type="button"
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-1 rounded border border-[var(--athanor-mist)] px-3 py-1.5 text-sm"
+          <Button
+            variant="secondary"
+            icon={<LockIcon />}
+            isDisabled={busy}
             onClick={() =>
               void run(async () => {
                 await lockVault();
@@ -192,142 +191,125 @@ export function LocalVaultPanel({
               })
             }
           >
-            <Lock className="h-3.5 w-3.5" />
             Lock vault
-          </button>
-
-          <div className="space-y-2 rounded border border-[var(--athanor-mist)] p-3">
-            <p className="text-xs font-medium">Add / update secret</p>
-            <input
-              className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-              placeholder="Secret name (e.g. HF_TOKEN)"
-              value={secretName}
-              onChange={(event) => setSecretName(event.target.value)}
-              list="vault-graph-secret-names"
-            />
-            <datalist id="vault-graph-secret-names">
-              {graphNames.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-            <input
-              type="password"
-              autoComplete="off"
-              className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-              placeholder="Secret value"
-              value={secretValue}
-              onChange={(event) => setSecretValue(event.target.value)}
-            />
-            <button
-              type="button"
-              disabled={busy || !secretName.trim() || !secretValue}
-              className="inline-flex w-full items-center justify-center rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white disabled:opacity-40"
-              onClick={() =>
-                void run(async () => {
-                  await putVaultEntry(secretName.trim(), secretValue);
-                  setSecretValue("");
-                  setMessage(`Saved ${secretName.trim()} (value not shown).`);
-                })
-              }
-            >
-              Save to vault
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs font-medium">Vault entries</p>
-            {entries.length === 0 && (
-              <p className="text-xs text-[var(--athanor-slate)]">No secrets stored yet.</p>
-            )}
-            {entries.map((entry) => (
-              <div
-                key={entry.id}
-                className="flex items-center justify-between gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-              >
-                <span>
-                  {entry.name}
-                  {!entry.hasValue && (
-                    <span className="ml-1 text-xs text-[var(--athanor-slate)]">(empty)</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className="rounded p-1 text-[var(--athanor-slate)] hover:text-red-700"
+          </Button>
+          <Card>
+            <CardBody>
+              <Form>
+                <Title headingLevel="h3">Add / update secret</Title>
+                <FormGroup label="Secret name" fieldId="vault-secret-name">
+                  <TextInput
+                    id="vault-secret-name"
+                    placeholder="Secret name (e.g. HF_TOKEN)"
+                    value={secretName}
+                    onChange={(_event, value) => setSecretName(value)}
+                    list="vault-graph-secret-names"
+                  />
+                </FormGroup>
+                <datalist id="vault-graph-secret-names">
+                  {graphNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                <FormGroup label="Secret value" fieldId="vault-secret-value">
+                  <TextInput
+                    id="vault-secret-value"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="Secret value"
+                    value={secretValue}
+                    onChange={(_event, value) => setSecretValue(value)}
+                  />
+                </FormGroup>
+                <Button
+                  variant="primary"
+                  isDisabled={busy || !secretName.trim() || !secretValue}
+                  onClick={() =>
+                    void run(async () => {
+                      await putVaultEntry(secretName.trim(), secretValue);
+                      setSecretValue("");
+                      setMessage(`Saved ${secretName.trim()} (value not shown).`);
+                    })
+                  }
+                >
+                  Save to vault
+                </Button>
+              </Form>
+            </CardBody>
+          </Card>
+          <Title headingLevel="h3">Vault entries</Title>
+          {entries.length === 0 && <p>No secrets stored yet.</p>}
+          {entries.map((entry) => (
+            <Card key={entry.id}>
+              <CardBody>
+                {entry.name}
+                {!entry.hasValue && <Label>empty</Label>}
+                <Button
+                  variant="plain"
                   aria-label={`Delete ${entry.name}`}
+                  icon={<TrashIcon />}
                   onClick={() =>
                     void run(async () => {
                       await deleteVaultEntry(entry.name);
                       setMessage(`Removed ${entry.name}.`);
                     })
                   }
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-
+                />
+              </CardBody>
+            </Card>
+          ))}
           {coverage && (
-            <div className="space-y-1 rounded border border-[var(--athanor-mist)] p-3 text-xs">
-              <p className="font-medium">Graph coverage</p>
-              {coverage.requested.length === 0 ? (
-                <p className="text-[var(--athanor-slate)]">
-                  No secret names referenced in this project yet.
-                </p>
-              ) : (
-                <ul className="space-y-1">
-                  {coverage.requested.map((name) => {
-                    const ok = coverage.present.includes(name);
-                    return (
-                      <li key={name} className="flex justify-between gap-2">
-                        <span>{name}</span>
-                        <span className={ok ? "text-emerald-700" : "text-amber-700"}>
-                          {ok ? "present" : "missing"}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
+            <Card>
+              <CardBody>
+                <Title headingLevel="h3">Graph coverage</Title>
+                {coverage.requested.length === 0 ? (
+                  <p>No secret names referenced in this project yet.</p>
+                ) : (
+                  <ul>
+                    {coverage.requested.map((name) => {
+                      const ok = coverage.present.includes(name);
+                      return (
+                        <li key={name}>
+                          {name} <Label color={ok ? "green" : "orange"}>{ok ? "present" : "missing"}</Label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </CardBody>
+            </Card>
           )}
-
-          <div className="mt-auto space-y-2 border-t border-[var(--athanor-mist)] pt-3">
-            <p className="text-xs font-medium">Materialize .env for local apps</p>
-            <p className="text-xs text-[var(--athanor-slate)]">
-              Absolute path on the API host (this machine). Writes a local `.env` — never included
-              in export ZIPs.
-            </p>
-            <input
-              className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-              placeholder="/path/to/exported-project/.env"
-              value={materializePath}
-              onChange={(event) => setMaterializePath(event.target.value)}
-            />
-            <button
-              type="button"
-              disabled={busy || !materializePath.trim()}
-              className="inline-flex w-full items-center justify-center rounded border border-[var(--athanor-mist)] px-3 py-1.5 text-sm disabled:opacity-40"
+          <Form>
+            <Title headingLevel="h3">Materialize .env for local apps</Title>
+            <p>Absolute path on the API host (this machine). Writes a local `.env` — never included in export ZIPs.</p>
+            <FormGroup label="Path" fieldId="vault-env-path">
+              <TextInput
+                id="vault-env-path"
+                placeholder="/path/to/exported-project/.env"
+                value={materializePath}
+                onChange={(_event, value) => setMaterializePath(value)}
+              />
+            </FormGroup>
+            <Button
+              variant="secondary"
+              isDisabled={busy || !materializePath.trim()}
               onClick={() =>
                 void run(async () => {
                   const result = await materializeVaultEnv(materializePath.trim(), graph);
                   setMessage(
                     `Wrote ${result.writtenCount} secret(s) to ${result.path}` +
-                      (result.missing.length
-                        ? ` (missing: ${result.missing.join(", ")})`
-                        : ""),
+                      (result.missing.length ? ` (missing: ${result.missing.join(", ")})` : ""),
                   );
                 })
               }
             >
               Write .env
-            </button>
-          </div>
+            </Button>
+          </Form>
         </>
       )}
-
-      {message && <p className="text-xs text-emerald-800">{message}</p>}
-      {error && <p className="text-xs text-red-700">{error}</p>}
+      {message && <Alert variant="success" isInline title={message} />}
+      {error && <Alert variant="danger" isInline title={error} />}
     </aside>
   );
 }

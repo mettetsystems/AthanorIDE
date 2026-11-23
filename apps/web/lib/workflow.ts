@@ -10,6 +10,10 @@ export const TASK_PREFIX = "workflow-task:";
 export const taskFlowId = (id: string) => `${TASK_PREFIX}${id}`;
 export const parseTaskFlowId = (id: string) =>
   id.startsWith(TASK_PREFIX) ? id.slice(TASK_PREFIX.length) : null;
+export const TRANSITION_PREFIX = "workflow-transition:";
+export const transitionFlowId = (id: string) => `${TRANSITION_PREFIX}${id}`;
+export const parseTransitionFlowId = (id: string) =>
+  id.startsWith(TRANSITION_PREFIX) ? id.slice(TRANSITION_PREFIX.length) : null;
 export const isExecutable = (type: string) =>
   type === "agent.sandboxed" || type.startsWith("harness.");
 export function createWorkflowTask(index = 0): WorkflowTask {

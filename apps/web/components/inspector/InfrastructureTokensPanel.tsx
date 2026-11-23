@@ -6,13 +6,24 @@
  */
 import { useMemo, useState } from "react";
 import {
+  Button,
+  Card,
+  CardBody,
+  Form,
+  FormGroup,
+  FormSelect,
+  FormSelectOption,
+  TextInput,
+  Title,
+} from "@patternfly/react-core";
+import { KeyIcon, PlusCircleIcon, TimesIcon, TrashIcon } from "@patternfly/react-icons";
+
+import {
   DEFAULT_INFRASTRUCTURE_TOKEN_KINDS,
   newId,
   type InfrastructureTokenKind,
   type InfrastructureTokenSlot,
 } from "@athanor/contracts";
-import { KeyRound, Plus, Trash2, X } from "lucide-react";
-
 import { useProjectStore } from "@/store/project-store";
 
 type InfrastructureTokensPanelProps = {
@@ -75,115 +86,79 @@ export function InfrastructureTokensPanel({ open, onClose }: InfrastructureToken
   };
 
   return (
-    <aside
-      className="flex h-full flex-col gap-3 overflow-auto bg-white/90 p-4"
-      aria-label="Infrastructure pull tokens"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <KeyRound className="h-4 w-4" aria-hidden />
-            Infra pull tokens
-          </h2>
-          <p className="mt-1 text-xs text-[var(--athanor-slate)]">
-            Registry credentials for Hugging Face, Kaggle, Docker, and more. Store{" "}
-            <strong className="font-medium">secret names only</strong> — never paste token values.
-            Per-node tokens stay on each node&apos;s inspector.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="rounded p-1 text-[var(--athanor-slate)] hover:bg-[var(--athanor-mist)]"
-          onClick={onClose}
-          aria-label="Close infrastructure tokens"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="space-y-3">
-        {tokens.map((slot) => (
-          <div
-            key={slot.id}
-            className="space-y-2 rounded border border-[var(--athanor-mist)] bg-white p-3"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{slot.label}</span>
-              {slot.kind === "custom" && (
-                <button
-                  type="button"
-                  className="rounded p-1 text-[var(--athanor-slate)] hover:text-red-700"
-                  onClick={() => removeInfrastructureToken(slot.id)}
-                  aria-label={`Remove ${slot.label}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <label className="block space-y-1 text-xs">
-              <span className="font-medium text-[var(--athanor-slate)]">Secret name</span>
-              <input
-                className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-                value={slot.secretName}
-                placeholder={slot.recommendedEnvName || "MY_REGISTRY_TOKEN"}
-                onChange={(event) => updateSlot(slot, { secretName: event.target.value })}
+    <aside aria-label="Infrastructure pull tokens">
+      <Title headingLevel="h2">
+        <KeyIcon /> Infra pull tokens
+      </Title>
+      <Button variant="plain" aria-label="Close infrastructure tokens" onClick={onClose} icon={<TimesIcon />} />
+      <p>
+        Registry credentials for Hugging Face, Kaggle, Docker, and more. Store secret names only — never paste token values. Per-node tokens stay on each node’s inspector.
+      </p>
+      {tokens.map((slot) => (
+        <Card key={slot.id}>
+          <CardBody>
+            <Title headingLevel="h3">{slot.label}</Title>
+            {slot.kind === "custom" && (
+              <Button
+                variant="plain"
+                aria-label={`Remove ${slot.label}`}
+                icon={<TrashIcon />}
+                onClick={() => removeInfrastructureToken(slot.id)}
               />
-            </label>
-            <label className="block space-y-1 text-xs">
-              <span className="font-medium text-[var(--athanor-slate)]">Provider</span>
-              <select
-                className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-                value={slot.provider}
-                onChange={(event) =>
-                  updateSlot(slot, {
-                    provider: event.target.value as InfrastructureTokenSlot["provider"],
-                  })
-                }
-              >
-                <option value="env">env</option>
-                <option value="file">file</option>
-                <option value="vault">vault</option>
-                <option value="cloud_secret_manager">cloud_secret_manager</option>
-              </select>
-            </label>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-auto space-y-2 border-t border-[var(--athanor-mist)] pt-3">
-        <label className="block space-y-1 text-xs">
-          <span className="font-medium">Add token slot</span>
-          <select
-            className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-            value={addKind}
-            onChange={(event) => setAddKind(event.target.value)}
-          >
-            <option value="">Select provider…</option>
+            )}
+            <Form>
+              <FormGroup label="Secret name" fieldId={`secret-${slot.id}`}>
+                <TextInput
+                  id={`secret-${slot.id}`}
+                  value={slot.secretName}
+                  placeholder={slot.recommendedEnvName || "MY_REGISTRY_TOKEN"}
+                  onChange={(_event, value) => updateSlot(slot, { secretName: value })}
+                />
+              </FormGroup>
+              <FormGroup label="Provider" fieldId={`provider-${slot.id}`}>
+                <FormSelect
+                  id={`provider-${slot.id}`}
+                  value={slot.provider}
+                  onChange={(_event, value) =>
+                    updateSlot(slot, { provider: value as InfrastructureTokenSlot["provider"] })
+                  }
+                >
+                  <FormSelectOption value="env" label="env" />
+                  <FormSelectOption value="file" label="file" />
+                  <FormSelectOption value="vault" label="vault" />
+                  <FormSelectOption value="cloud_secret_manager" label="cloud_secret_manager" />
+                </FormSelect>
+              </FormGroup>
+            </Form>
+          </CardBody>
+        </Card>
+      ))}
+      <Form>
+        <FormGroup label="Add token slot" fieldId="add-token-kind">
+          <FormSelect id="add-token-kind" value={addKind} onChange={(_event, value) => setAddKind(value)}>
+            <FormSelectOption value="" label="Select provider…" />
             {addOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+              <FormSelectOption key={option.value} value={option.value} label={option.label} />
             ))}
-          </select>
-        </label>
+          </FormSelect>
+        </FormGroup>
         {addKind === "custom" && (
-          <input
-            className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
+          <TextInput
+            aria-label="Custom provider label"
             placeholder="Custom provider label"
             value={customLabel}
-            onChange={(event) => setCustomLabel(event.target.value)}
+            onChange={(_event, value) => setCustomLabel(value)}
           />
         )}
-        <button
-          type="button"
-          className="inline-flex w-full items-center justify-center gap-1.5 rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white disabled:opacity-40"
-          disabled={!addKind || (addKind === "custom" && !customLabel.trim())}
+        <Button
+          variant="primary"
+          icon={<PlusCircleIcon />}
+          isDisabled={!addKind || (addKind === "custom" && !customLabel.trim())}
           onClick={handleAdd}
         >
-          <Plus className="h-3.5 w-3.5" />
           Add slot
-        </button>
-      </div>
+        </Button>
+      </Form>
     </aside>
   );
 }

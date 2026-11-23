@@ -26,20 +26,3 @@ body {
   min-height: 100vh;
 }
 
-/* React Flow canvas fills editor chrome without inheriting page gradient noise */
-.react-flow {
-  background: #f7f3ec;
-}
-
-.react-flow__attribution {
-  display: none;
-}
-
-.react-flow__handle {
-  z-index: 5;
-}
-
-.react-flow__handle-connecting {
-  cursor: crosshair;
-}
-

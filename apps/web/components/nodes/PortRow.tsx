@@ -3,7 +3,7 @@
 /**
  * Port row with contract badge, hover tooltip, and live compatibility highlighting.
  */
-import { Handle, Position } from "@xyflow/react";
+import type { PointerEvent } from "react";
 import {
   CONTRACT_TYPE_LABELS,
   areContractsCompatible,
@@ -44,7 +44,6 @@ function compatibilityForPort(
   if (!draft) return "neutral";
   if (draft.nodeId === nodeId && draft.handleId === port.id) return "origin";
 
-  // Dragging from an output → only inputs can be targets
   if (draft.handleType === "source") {
     if (direction !== "input") return "incompatible";
     return areContractsCompatible(draft.contractType, port.contractType)
@@ -52,7 +51,6 @@ function compatibilityForPort(
       : "incompatible";
   }
 
-  // Dragging from an input → only outputs can be sources
   if (direction !== "output") return "incompatible";
   return areContractsCompatible(port.contractType, draft.contractType)
     ? "compatible"
@@ -64,9 +62,10 @@ type PortRowProps = {
   port: NodePort;
   direction: "input" | "output";
   compact?: boolean;
+  onPortPointerDown?: (event: PointerEvent<HTMLButtonElement>) => void;
 };
 
-export function PortRow({ nodeId, port, direction, compact = false }: PortRowProps) {
+export function PortRow({ nodeId, port, direction, compact = false, onPortPointerDown }: PortRowProps) {
   const review = useUiPreferencesStore(s => s.workspaceRole === "security");
   const unused = useProjectStore(s => review && !portLinked(s.graph, nodeId, port.id));
   const draft = useConnectionDraftStore((state) => state.draft);
@@ -77,83 +76,49 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
   return (
     <div
       className={cn(
-        "group/port relative flex items-center gap-2 text-xs",
-        unused && "rounded bg-amber-50 outline outline-1 outline-amber-300",
-        isInput ? "justify-start" : "justify-end",
-        match === "incompatible" && draft ? "opacity-35" : null,
-        match === "compatible" && "rounded bg-emerald-50/80 ring-1 ring-emerald-300/70",
-        match === "origin" && "rounded bg-orange-50/80 ring-1 ring-orange-300/70",
+        "athanor-port",
+        unused && "athanor-port--unused",
+        isInput ? "athanor-port--in" : "athanor-port--out",
+        match === "incompatible" && draft ? "athanor-port--dim" : null,
+        match === "compatible" && "athanor-port--compatible",
+        match === "origin" && "athanor-port--origin",
       )}
       title={portTitle(port, direction)}
       data-port-id={port.id}
+      data-port-node={nodeId}
+      data-port-direction={direction}
     >
       {isInput && (
-        <Handle
-          id={port.id}
-          type="target"
-          position={Position.Left}
-          className={cn(
-            "!size-4 !border-2 !border-white !bg-[var(--athanor-ember)] transition-transform",
-            "group-hover/port:!scale-125",
-            match === "compatible" && "!bg-emerald-600 !scale-125",
-            match === "incompatible" && draft && "!bg-stone-400",
-          )}
+        <button
+          type="button"
+          className={cn("athanor-port__handle", "athanor-port__handle--in", match === "compatible" && "is-compatible")}
           aria-label={portTitle(port, direction)}
+          onPointerDown={onPortPointerDown}
         />
       )}
 
-      <span
-        className={cn(
-          "rounded border px-1 py-0.5 text-[9px] font-bold tracking-wide",
-          isInput ? "border-orange-200 text-[var(--athanor-ember)]" : "border-stone-300 text-[var(--athanor-ink)]",
-        )}
-        aria-hidden="true"
-      >
+      <span className={cn("athanor-port__dir", isInput ? "is-in" : "is-out")} aria-hidden="true">
         {isInput ? "IN" : "OUT"}
       </span>
-      <span className={cn("font-medium", isInput ? "pl-1" : "pr-1")}>{port.name}</span>
-      <span
-        className={cn(
-          "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-          isInput
-            ? "bg-orange-100 text-[var(--athanor-ember)]"
-            : "bg-stone-200 text-[var(--athanor-ink)]",
-        )}
-      >
-        {label}
-      </span>
-      {unused && <span className="text-[9px] text-amber-800">unused</span>}
-      {!compact && port.required === false && (
-        <span className="text-[10px] text-[var(--athanor-slate)]">opt</span>
-      )}
+      <span className="athanor-port__name">{port.name}</span>
+      <span className={cn("athanor-port__contract", isInput ? "is-in" : "is-out")}>{label}</span>
+      {unused && <span className="athanor-port__unused">unused</span>}
+      {!compact && port.required === false && <span className="athanor-port__opt">opt</span>}
 
       {!isInput && (
-        <Handle
-          id={port.id}
-          type="source"
-          position={Position.Right}
-          className={cn(
-            "!size-4 !border-2 !border-white !bg-[var(--athanor-ink)] transition-transform",
-            "group-hover/port:!scale-125",
-            match === "compatible" && "!bg-emerald-600 !scale-125",
-            match === "incompatible" && draft && "!bg-stone-400",
-          )}
+        <button
+          type="button"
+          className={cn("athanor-port__handle", "athanor-port__handle--out", match === "compatible" && "is-compatible")}
           aria-label={portTitle(port, direction)}
+          onPointerDown={onPortPointerDown}
         />
       )}
 
-      <div
-        className={cn(
-          "pointer-events-none absolute z-20 hidden max-w-[220px] rounded-md border border-[var(--athanor-mist)] bg-white px-2 py-1.5 text-[10px] leading-snug text-[var(--athanor-slate)] shadow-md",
-          "group-hover/port:block",
-          isInput ? "left-0 top-full mt-1" : "right-0 top-full mt-1",
-        )}
-        role="tooltip"
-      >
-        <p className="font-semibold text-[var(--athanor-ink)]">
+      <div className={cn("athanor-port__tip", isInput ? "is-in" : "is-out")} role="tooltip">
+        <p className="athanor-port__tip-title">
           {isInput ? "Input" : "Output"} · {label}
         </p>
-        <p className="mt-0.5">
+        <p>
           {isInput
             ? port.contractType === "ANY"
               ? "Connect any output contract here."
@@ -162,17 +127,9 @@ export function PortRow({ nodeId, port, direction, compact = false }: PortRowPro
               ? "Connect this only to an Any input."
               : `Connect this to a ${label} input or an Any input.`}
         </p>
-        {port.required ? (
-          <p className="mt-0.5 text-[var(--athanor-ember)]">Required</p>
-        ) : (
-          <p className="mt-0.5">Optional</p>
-        )}
-        {match === "compatible" && (
-          <p className="mt-0.5 font-medium text-emerald-700">Compatible with current drag</p>
-        )}
-        {match === "incompatible" && draft && (
-          <p className="mt-0.5 font-medium text-red-700">Not compatible with current drag</p>
-        )}
+        {port.required ? <p className="athanor-port__required">Required</p> : <p>Optional</p>}
+        {match === "compatible" && <p className="athanor-port__ok">Compatible with current drag</p>}
+        {match === "incompatible" && draft && <p className="athanor-port__bad">Not compatible with current drag</p>}
       </div>
     </div>
   );

@@ -1,0 +1,394 @@
+.athanor-topology {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  background: #f7f3ec;
+}
+
+.athanor-topology [data-test-id="topology"] {
+  background-color: #f7f3ec;
+  background-image: radial-gradient(#d6d3d1 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.athanor-topology .pf-v6-c-topology-view,
+.athanor-topology .pf-topology-container {
+  height: 100%;
+}
+
+.athanor-topology__meta {
+  color: var(--athanor-slate, #44403c);
+  font-size: 0.75rem;
+}
+
+.athanor-topology__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.athanor-topology__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.athanor-topology__overlay line {
+  stroke: var(--athanor-ember, #c2410c);
+  stroke-width: 2;
+}
+
+.athanor-topology__box,
+.athanor-topology__rubber {
+  position: absolute;
+  border: 2px solid #06c;
+  background: rgb(0 102 204 / 15%);
+  pointer-events: none;
+}
+
+.athanor-topology__draw {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  cursor: crosshair;
+}
+
+.athanor-topology > .athanor-topology__alert.pf-v6-c-alert {
+  position: absolute;
+  z-index: 6;
+  inset-inline: 0.75rem;
+  top: 0.75rem;
+  max-width: 36rem;
+}
+
+.athanor-fo {
+  overflow: visible;
+}
+
+.athanor-card,
+.athanor-flow,
+.athanor-pill {
+  box-sizing: border-box;
+  height: 100%;
+  background: rgb(255 255 255 / 95%);
+  color: var(--athanor-ink, #1c1917);
+  font-family: var(--font-sans), sans-serif;
+}
+
+.athanor-card {
+  border: 1px solid var(--athanor-mist, #e7e5e4);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 8%);
+}
+
+.athanor-card.is-macro {
+  min-width: 0;
+  padding: 0;
+}
+
+.athanor-card.is-selected,
+.athanor-flow.is-selected,
+.athanor-pill.is-selected {
+  border-color: var(--athanor-ember, #c2410c);
+  box-shadow: 0 0 0 2px rgb(194 65 12 / 25%);
+}
+
+.athanor-card.is-security {
+  box-shadow: 0 0 0 2px #fbbf24;
+}
+
+.athanor-card__header,
+.athanor-flow__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  cursor: grab;
+}
+
+.athanor-card__header {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--athanor-mist, #e7e5e4);
+}
+
+.athanor-card__titles {
+  min-width: 0;
+  flex: 1;
+}
+
+.athanor-card__titles h3,
+.athanor-flow__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.athanor-card__titles p,
+.athanor-card__empty {
+  margin: 0;
+  overflow: hidden;
+  color: var(--athanor-slate, #44403c);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.athanor-card__deploy {
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.athanor-card__bus {
+  color: var(--athanor-ember, #c2410c);
+  font-family: ui-monospace, monospace;
+  font-size: 0.65rem;
+}
+
+.athanor-card__icon {
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.1rem;
+  color: var(--athanor-ember, #c2410c);
+}
+
+.athanor-card__security {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  background: #fffbeb;
+  color: #78350f;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.athanor-card__ports,
+.athanor-card__config,
+.athanor-card__payload,
+.athanor-flow__body {
+  padding: 0.35rem 0.6rem 0.5rem;
+}
+
+.athanor-card__config,
+.athanor-card__payload {
+  border-top: 1px solid var(--athanor-mist, #e7e5e4);
+  color: var(--athanor-slate, #44403c);
+  font-size: 0.65rem;
+}
+
+.athanor-card__payload p:last-child {
+  overflow: hidden;
+  font-family: ui-monospace, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.athanor-health {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin-top: 0.15rem;
+}
+
+.athanor-health.is-danger { color: #c9190b; }
+.athanor-health.is-warning { color: #f0ab00; }
+.athanor-health.is-success { color: #3e8635; }
+.athanor-health.is-unknown {
+  display: inline-block;
+  border-radius: 999px;
+  background: #d6d3d1;
+}
+
+.athanor-port {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 28px;
+  font-size: 0.72rem;
+}
+
+.athanor-port--out { justify-content: flex-end; }
+.athanor-port--unused { outline: 1px solid #fcd34d; background: #fffbeb; }
+.athanor-port--dim { opacity: 0.35; }
+.athanor-port--compatible { background: rgb(16 185 129 / 12%); box-shadow: inset 0 0 0 1px #6ee7b7; }
+.athanor-port--origin { background: rgb(251 146 60 / 16%); box-shadow: inset 0 0 0 1px #fdba74; }
+
+.athanor-port__handle {
+  width: 0.85rem;
+  height: 0.85rem;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  cursor: crosshair;
+}
+
+.athanor-port__handle--in { background: var(--athanor-ember, #c2410c); }
+.athanor-port__handle--out { background: var(--athanor-ink, #1c1917); }
+.athanor-port__handle.is-compatible { background: #059669; }
+
+.athanor-port__dir,
+.athanor-port__contract {
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.athanor-port__dir.is-in { border: 1px solid #fed7aa; color: var(--athanor-ember, #c2410c); }
+.athanor-port__dir.is-out { border: 1px solid #d6d3d1; }
+.athanor-port__contract.is-in { background: #ffedd5; color: var(--athanor-ember, #c2410c); }
+.athanor-port__contract.is-out { background: #e7e5e4; }
+
+.athanor-port__unused,
+.athanor-port__opt { color: #92400e; font-size: 0.62rem; }
+
+.athanor-port__tip {
+  display: none;
+  position: absolute;
+  z-index: 4;
+  top: 100%;
+  width: 13rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--athanor-mist, #e7e5e4);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--athanor-slate, #44403c);
+  font-size: 0.65rem;
+  line-height: 1.35;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+}
+
+.athanor-port:hover .athanor-port__tip { display: block; }
+.athanor-port__tip.is-in { left: 0; }
+.athanor-port__tip.is-out { right: 0; }
+.athanor-port__tip-title { margin: 0 0 0.15rem; color: var(--athanor-ink, #1c1917); font-weight: 700; }
+.athanor-port__required { color: var(--athanor-ember, #c2410c); }
+.athanor-port__ok { color: #047857; font-weight: 600; }
+.athanor-port__bad { color: #b91c1c; font-weight: 600; }
+
+.athanor-macro {
+  border-style: dashed;
+  border-width: 2px;
+  background: rgb(245 240 232 / 95%);
+}
+
+.athanor-lane {
+  fill: rgb(231 229 228 / 35%);
+  stroke: rgb(28 25 23 / 25%);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.athanor-lane.is-selected { stroke: var(--athanor-ember, #c2410c); }
+
+.athanor-lane__title {
+  fill: var(--athanor-ink, #1c1917);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.athanor-lane__meta {
+  fill: var(--athanor-slate, #44403c);
+  font-size: 10px;
+}
+
+.athanor-task-group {
+  fill: rgb(248 250 252 / 35%);
+}
+
+.athanor-task-group__title {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.athanor-flow {
+  position: relative;
+  border: 2px solid #2563eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.athanor-flow__title {
+  padding: 0.4rem 0.7rem;
+  color: #fff;
+}
+
+.athanor-flow__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: calc(100% - 2.4rem);
+  overflow: auto;
+}
+
+.athanor-flow__handle {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+}
+
+.athanor-flow__handle.is-in { left: -0.4rem; }
+.athanor-flow__handle.is-out { right: -0.4rem; }
+
+.athanor-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  background: transparent;
+  cursor: nwse-resize;
+}
+
+.athanor-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 999px;
+  background: #1c1917;
+  color: #fff;
+  font-weight: 700;
+}
+
+.athanor-pill.is-end {
+  border: 4px solid #065f46;
+  background: #047857;
+}
+
+.athanor-edge__hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 16;
+}
+
+.athanor-edge__label {
+  fill: var(--athanor-ink, #1c1917);
+  font-size: 10px;
+}
+
+.athanor-edge__label-bg {
+  fill: rgb(255 255 255 / 90%);
+}
+
+.athanor-edge.is-animated:not(.is-portal) path:nth-of-type(2) {
+  stroke-dasharray: 6 4;
+}
+
+.athanor-edge.is-animated path:nth-of-type(2) {
+  animation: athanor-dash 0.8s linear infinite;
+}
+
+@keyframes athanor-dash {
+  to { stroke-dashoffset: -20; }
+}

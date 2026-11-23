@@ -1,6 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  ExpandableSection,
+  Form,
+  FormGroup,
+  TextArea,
+  Title,
+} from "@patternfly/react-core";
 
 import {
   applyDraft,
@@ -87,96 +97,78 @@ export function AssistantPanel() {
   };
 
   return (
-    <section className="flex h-full flex-col gap-3 p-3" aria-label="AI assistant">
-      <header>
-        <h2 className="text-sm font-semibold">AI assistant</h2>
-        <p className="mt-1 text-xs text-[var(--athanor-slate)]">
-          Set the endpoint and optional API token with the gear under search.
-        </p>
-      </header>
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--athanor-slate)]">
-          Build each task into an agent stage. Task results feed the next prompts through your workflow transitions.
-        </p>
-        {openIds.length < graph.workflow.tasks.length && (
-          <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={rebuild} disabled={busy}
-              onChange={(event) => setRebuild(event.target.checked)} />
-            Rebuild all tasks (replace components; Undo available)
-          </label>
-        )}
-        {rebuild && <p className="text-xs text-[var(--athanor-slate)]">
-          Existing task components and their configuration will be replaced. Task briefs and drawn transitions stay in place.
-        </p>}
-        <button type="button"
-          className="rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white disabled:opacity-40"
-          disabled={!ready || busy || targetIds.length === 0} onClick={() => void build()}>
-          {busy ? "Working…" : rebuild ? "Rebuild agent chain" : "Build agent chain"}
-        </button>
-        {!ready && <p className="text-xs text-[var(--athanor-slate)]">
-          Add a role and expected tasks to every task before building.
-        </p>}
-        {ready && targetIds.length === 0 && <p className="text-xs text-[var(--athanor-slate)]">
-          Every task already has components. Select Rebuild all tasks to improve this implementation.
-        </p>}
-      </div>
+    <section aria-label="AI assistant">
+      <Title headingLevel="h2">AI assistant</Title>
+      <p>Set the endpoint and optional API token with the gear under search.</p>
+      <p>Build each task into an agent stage. Task results feed the next prompts through your workflow transitions.</p>
+      {openIds.length < graph.workflow.tasks.length && (
+        <Checkbox
+          id="rebuild-tasks"
+          label="Rebuild all tasks (replace components; Undo available)"
+          isChecked={rebuild}
+          isDisabled={busy}
+          onChange={(_event, checked) => setRebuild(checked)}
+        />
+      )}
+      {rebuild && (
+        <p>Existing task components and their configuration will be replaced. Task briefs and drawn transitions stay in place.</p>
+      )}
+      <Button variant="primary" isDisabled={!ready || busy || targetIds.length === 0} onClick={() => void build()}>
+        {busy ? "Working…" : rebuild ? "Rebuild agent chain" : "Build agent chain"}
+      </Button>
+      {!ready && <p>Add a role and expected tasks to every task before building.</p>}
+      {ready && targetIds.length === 0 && (
+        <p>Every task already has components. Select Rebuild all tasks to improve this implementation.</p>
+      )}
       {role !== "sme" && (
-        <form
-          className="space-y-2"
+        <Form
           onSubmit={(event) => {
             event.preventDefault();
             void ask();
           }}
         >
-          <label className="block text-xs font-medium" htmlFor="assistant-question">
-            Ask about this deployment
-          </label>
-          <textarea
-            id="assistant-question"
-            className="min-h-24 w-full rounded border border-[var(--athanor-mist)] px-2 py-1.5 text-sm"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Which sandbox and model does this task use?"
-          />
-          <button
-            type="submit"
-            className="rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white disabled:opacity-40"
-            disabled={busy || !question.trim()}
-          >
+          <FormGroup label="Ask about this deployment" fieldId="assistant-question">
+            <TextArea
+              id="assistant-question"
+              value={question}
+              onChange={(_event, value) => setQuestion(value)}
+              placeholder="Which sandbox and model does this task use?"
+            />
+          </FormGroup>
+          <Button type="submit" variant="primary" isDisabled={busy || !question.trim()}>
             {busy ? "Asking…" : "Ask"}
-          </button>
-        </form>
+          </Button>
+        </Form>
       )}
-      {status && <p className="text-sm">{status}</p>}
-      {error && <p className="text-sm text-red-700">{error}</p>}
-      {plans.length > 0 && <div className="space-y-2" aria-label="Engineering stage plans">
-        <h3 className="text-sm font-semibold">Engineering stage plans</h3>
-        <p className="text-xs text-[var(--athanor-slate)]">
-          Rebuild after editing task briefs to refresh these plans. Review setup requirements before exporting. Run preview does not execute the models.
-        </p>
-        {plans.map((plan) => <details key={plan.taskId} className="rounded border border-[var(--athanor-mist)] p-2 text-xs">
-          <summary className="cursor-pointer font-medium">{plan.name}</summary>
-          <p className="mt-2">{plan.approach}</p>
-          <p className="mt-2"><strong>Input:</strong> {plan.inputContract}</p>
-          <p className="mt-2"><strong>Output:</strong> {plan.outputContract}</p>
-          <p className="mt-2 font-medium">Acceptance checks</p>
-          <ul className="list-disc space-y-1 pl-4">{plan.acceptanceChecks.map((check, i) => <li key={i}>{check}</li>)}</ul>
-          <p className="mt-2"><strong>Connected tools:</strong> {plan.connectedTools.join(", ") || "None"}</p>
-          {plan.setupRequirements.length > 0 && <>
-            <p className="mt-2 font-medium">Setup requirements</p>
-            <ul className="list-disc space-y-1 pl-4">{plan.setupRequirements.map((item, i) => <li key={i}>{item}</li>)}</ul>
-          </>}
-        </details>)}
-      </div>}
-      {answer && <p className="whitespace-pre-wrap text-sm">{answer}</p>}
+      {status && <p>{status}</p>}
+      {error && <Alert variant="danger" isInline title={error} />}
+      {plans.length > 0 && (
+        <div aria-label="Engineering stage plans">
+          <Title headingLevel="h3">Engineering stage plans</Title>
+          <p>Rebuild after editing task briefs to refresh these plans. Review setup requirements before exporting. Run preview does not execute the models.</p>
+          {plans.map((plan) => (
+            <ExpandableSection key={plan.taskId} toggleText={plan.name}>
+              <p>{plan.approach}</p>
+              <p><strong>Input:</strong> {plan.inputContract}</p>
+              <p><strong>Output:</strong> {plan.outputContract}</p>
+              <p>Acceptance checks</p>
+              <ul>{plan.acceptanceChecks.map((check, index) => <li key={index}>{check}</li>)}</ul>
+              <p><strong>Connected tools:</strong> {plan.connectedTools.join(", ") || "None"}</p>
+              {plan.setupRequirements.length > 0 && (
+                <>
+                  <p>Setup requirements</p>
+                  <ul>{plan.setupRequirements.map((item, index) => <li key={index}>{item}</li>)}</ul>
+                </>
+              )}
+            </ExpandableSection>
+          ))}
+        </div>
+      )}
+      {answer && <p>{answer}</p>}
       {sources.length > 0 && (
         <div>
-          <p className="text-xs font-medium text-[var(--athanor-slate)]">From this project</p>
-          <ul className="mt-1 list-disc pl-4 text-xs text-[var(--athanor-slate)]">
-            {sources.map((source) => (
-              <li key={source}>{source}</li>
-            ))}
-          </ul>
+          <p>From this project</p>
+          <ul>{sources.map((source) => <li key={source}>{source}</li>)}</ul>
         </div>
       )}
     </section>

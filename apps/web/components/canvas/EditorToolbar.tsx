@@ -7,23 +7,40 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import {
-  Boxes,
-  Download,
-  FolderOpen,
-  Gauge,
-  KeyRound,
-  Map,
-  Package,
-  Play,
-  Redo2,
-  Save,
-  Search,
-  Settings,
-  Shield,
-  ShieldCheck,
-  Undo2,
-} from "lucide-react";
+  Alert,
+  Button,
+  Checkbox,
+  FormSelect,
+  FormSelectOption,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuList,
+  Popover,
+  SearchInput,
+  TextInput,
+  Toolbar,
+  ToolbarContent,
+  ToolbarGroup,
+  ToolbarItem,
+} from "@patternfly/react-core";
+import {
+  BoxesIcon,
+  CogIcon,
+  DownloadIcon,
+  FolderOpenIcon,
+  KeyIcon,
+  OutlinedSaveIcon,
+  PlayIcon,
+  RedoIcon,
+  ShieldAltIcon,
+  TachometerAltIcon,
+  TopologyIcon,
+  UndoIcon,
+  UploadIcon,
+} from "@patternfly/react-icons";
 
+import { AssistantSettings } from "@/components/assistant/AssistantSettings";
 import { executeProject } from "@/lib/execute";
 import {
   downloadExportZip,
@@ -34,16 +51,15 @@ import {
 import { downloadGraphJson, importGraphJson } from "@/lib/persistence";
 import { importProjectIntoLibrary } from "@/lib/project-library";
 import { validateCurrentProject } from "@/lib/validate";
+import { useExecutionStore } from "@/store/execution-store";
 import {
   selectCanRedo,
   selectCanUndo,
   useProjectStore,
 } from "@/store/project-store";
-import { useExecutionStore } from "@/store/execution-store";
 import { useSelectionStore } from "@/store/selection-store";
-import { useValidationStore } from "@/store/validation-store";
-import { AssistantSettings } from "@/components/assistant/AssistantSettings";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
+import { useValidationStore } from "@/store/validation-store";
 
 type EditorToolbarProps = {
   onOpenInfrastructureTokens?: () => void;
@@ -51,6 +67,16 @@ type EditorToolbarProps = {
   onToggleNodeLibrary?: () => void;
   onToggleInspector?: () => void;
 };
+
+const FORMATS: { value: NonNullable<ExportOptions["exportFormat"]>; label: string }[] = [
+  { value: "code", label: "Source code" },
+  { value: "helm", label: "Helm Chart" },
+  { value: "podman", label: "Podman container" },
+  { value: "docker", label: "Docker container" },
+  { value: "openshift", label: "OpenShift deployment" },
+  { value: "npm", label: "npm package" },
+  { value: "makefile", label: "Makefiles" },
+];
 
 export function EditorToolbar({
   onOpenInfrastructureTokens,
@@ -65,30 +91,21 @@ export function EditorToolbar({
   const [exportFormat, setExportFormat] =
     useState<NonNullable<ExportOptions["exportFormat"]>>("code");
   const [searchQuery, setSearchQuery] = useState("");
-  const [assistantSettingsOpen, setAssistantSettingsOpen] = useState(false);
   const graph = useProjectStore((state) => state.graph);
   const setProjectName = useProjectStore((state) => state.setProjectName);
-  const setExportConfiguration = useProjectStore(
-    (state) => state.setExportConfiguration,
-  );
+  const setExportConfiguration = useProjectStore((state) => state.setExportConfiguration);
   const replaceGraph = useProjectStore((state) => state.replaceGraph);
   const undo = useProjectStore((state) => state.undo);
   const redo = useProjectStore((state) => state.redo);
   const markSaved = useProjectStore((state) => state.markSaved);
   const persistenceError = useProjectStore((state) => state.persistenceError);
-  const lowResourceMode = useUiPreferencesStore(
-    (state) => state.lowResourceMode,
-  );
-  const setLowResourceMode = useUiPreferencesStore(
-    (state) => state.setLowResourceMode,
-  );
-  const collapseSelectionToMacro = useProjectStore(
-    (state) => state.collapseSelectionToMacro,
-  );
+  const lowResourceMode = useUiPreferencesStore((state) => state.lowResourceMode);
+  const setLowResourceMode = useUiPreferencesStore((state) => state.setLowResourceMode);
+  const collapseSelectionToMacro = useProjectStore((state) => state.collapseSelectionToMacro);
   const addSwimlane = useProjectStore((state) => state.addSwimlane);
   const canUndo = useProjectStore(selectCanUndo);
   const canRedo = useProjectStore(selectCanRedo);
-  const role = useUiPreferencesStore((s) => s.workspaceRole);
+  const role = useUiPreferencesStore((state) => state.workspaceRole);
   const setResult = useValidationStore((state) => state.setResult);
   const setError = useValidationStore((state) => state.setError);
   const setExecRunning = useExecutionStore((state) => state.setRunning);
@@ -111,448 +128,352 @@ export function EditorToolbar({
   const searchHits = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
-    if (role === "sme")
+    if (role === "sme") {
       return graph.workflow.tasks
         .filter((task) =>
-          `${task.name} ${task.role} ${task.expectedTasks}`
-            .toLowerCase()
-            .includes(query),
+          `${task.name} ${task.role} ${task.expectedTasks}`.toLowerCase().includes(query),
         )
         .map((task) => ({
           id: `workflow-task:${task.id}`,
           name: task.name,
           type: "Workflow task",
         }));
+    }
     return graph.nodes.filter(
       (node) =>
         node.name.toLowerCase().includes(query) ||
         node.type.toLowerCase().includes(query) ||
-        String(node.configuration.busId ?? "")
-          .toLowerCase()
-          .includes(query),
+        String(node.configuration.busId ?? "").toLowerCase().includes(query),
     );
   }, [graph.nodes, graph.workflow.tasks, role, searchQuery]);
 
   return (
-    <header className="flex flex-wrap items-center gap-3 border-b border-[var(--athanor-mist)] bg-white/90 px-4 py-3">
-      {role !== "sme" && (
-        <button
-          type="button"
-          className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden"
-          onClick={onToggleNodeLibrary}
-        >
-          Node library
-        </button>
-      )}
-      <button
-        type="button"
-        className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden"
-        onClick={onToggleInspector}
-      >
-        Inspector
-      </button>
-      <button
-        type="button"
-        aria-expanded={actionsOpen}
-        className="rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs lg:hidden"
-        onClick={() => setActionsOpen(!actionsOpen)}
-      >
-        Actions
-      </button>
-      {persistenceError && (
-        <p role="alert" className="basis-full text-xs text-red-700">
-          {persistenceError}
-        </p>
-      )}
-      <Link
-        href="/"
-        className="flex shrink-0 items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs font-medium text-[var(--athanor-slate)] hover:border-[var(--athanor-ember)] hover:text-[var(--athanor-ember)]"
-        title="Back to projects"
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- compact toolbar mark */}
-        <img
-          src="/logo.jpg"
-          alt=""
-          width={28}
-          height={28}
-          className="size-7 rounded-sm object-cover"
-        />
-        <span>Projects</span>
-      </Link>
-      <div className="min-w-[12rem] flex-1">
-        <label className="sr-only" htmlFor="project-name">
-          Project name
-        </label>
-        <input
-          id="project-name"
-          className="w-full rounded border border-transparent bg-transparent px-1 text-lg font-semibold outline-none hover:border-[var(--athanor-mist)] focus:border-[var(--athanor-ember)]"
-          style={{ fontFamily: "var(--font-display)" }}
-          value={graph.project.name}
-          onChange={(event) => setProjectName(event.target.value)}
-        />
-        <p className="text-xs text-[var(--athanor-slate)]">
-          AthanorIDE · schema {graph.schemaVersion} · autosaves locally
-        </p>
-      </div>
-
-      <div className="relative min-w-[14rem]">
-        <label className="sr-only" htmlFor="graph-search">
-          Search graph
-        </label>
-        <div className="flex items-center gap-1 rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5">
-          <Search className="size-4 text-[var(--athanor-slate)]" aria-hidden />
-          <input
-            id="graph-search"
-            className="w-full bg-transparent text-sm outline-none"
+    <Toolbar id="editor-toolbar" isExpanded={actionsOpen}>
+      <ToolbarContent>
+        {persistenceError && (
+          <ToolbarItem>
+            <Alert variant="danger" isInline isPlain title={persistenceError} />
+          </ToolbarItem>
+        )}
+        {role !== "sme" && (
+          <ToolbarItem visibility={{ default: "visible", lg: "hidden" }}>
+            <Button variant="control" onClick={onToggleNodeLibrary}>
+              Node library
+            </Button>
+          </ToolbarItem>
+        )}
+        <ToolbarItem visibility={{ default: "visible", lg: "hidden" }}>
+          <Button variant="control" onClick={onToggleInspector}>
+            Inspector
+          </Button>
+        </ToolbarItem>
+        <ToolbarItem visibility={{ default: "visible", lg: "hidden" }}>
+          <Button
+            variant="control"
+            aria-expanded={actionsOpen}
+            onClick={() => setActionsOpen((open) => !open)}
+          >
+            Actions
+          </Button>
+        </ToolbarItem>
+        <ToolbarItem>
+          <Link href="/" title="Back to projects">
+            <Button variant="secondary" icon={<img src="/logo.jpg" alt="" width={28} height={28} />}>
+              Projects
+            </Button>
+          </Link>
+        </ToolbarItem>
+        <ToolbarItem>
+          <TextInput
+            id="project-name"
+            aria-label="Project name"
+            value={graph.project.name}
+            onChange={(_event, value) => setProjectName(value)}
+          />
+          <p>AthanorIDE · schema {graph.schemaVersion} · autosaves locally</p>
+        </ToolbarItem>
+        <ToolbarItem style={{ position: "relative", minWidth: "14rem" }}>
+          <SearchInput
+            aria-label="Search graph"
             placeholder={role === "sme" ? "Search tasks…" : "Search nodes…"}
             value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
+            onChange={(_event, value) => setSearchQuery(value)}
+            onClear={() => setSearchQuery("")}
             onKeyDown={(event) => {
-              if (event.key === "Enter" && searchHits[0]) {
-                focusNode(searchHits[0].id);
-              }
+              if (event.key === "Enter" && searchHits[0]) focusNode(searchHits[0].id);
             }}
           />
-        </div>
-        <div className="mt-1 flex justify-end">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs"
-            aria-label="Assistant model settings"
-            aria-expanded={assistantSettingsOpen}
-            onClick={() => setAssistantSettingsOpen((open) => !open)}
-          >
-            <Settings className="size-3.5" />
-            Assistant
-          </button>
-        </div>
-        {assistantSettingsOpen && onOpenLocalVault && (
-          <AssistantSettings onOpenVault={onOpenLocalVault} />
-        )}
-        {searchQuery.trim() && (
-          <ul className="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded border border-[var(--athanor-mist)] bg-white text-sm shadow">
-            {searchHits.length === 0 ? (
-              <li className="px-3 py-2 text-[var(--athanor-slate)]">
-                No matches
-              </li>
-            ) : (
-              searchHits.slice(0, 8).map((node) => (
-                <li key={node.id}>
-                  <button
-                    type="button"
-                    className="w-full px-3 py-2 text-left hover:bg-[var(--athanor-mist)]/50"
-                    onClick={() => {
-                      focusNode(node.id);
-                      setSearchQuery("");
-                    }}
-                  >
-                    <span className="block font-medium">{node.name}</span>
-                    <span className="block text-xs text-[var(--athanor-slate)]">
-                      {node.type}
-                    </span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-        )}
-      </div>
-
-      <div
-        className={`${actionsOpen ? "flex" : "hidden lg:flex"} max-h-[35vh] flex-wrap items-center gap-2 overflow-y-auto lg:max-h-none lg:overflow-visible`}
-      >
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm disabled:opacity-40"
-          onClick={() => undo()}
-          disabled={!canUndo}
-          aria-label="Undo"
-        >
-          <Undo2 className="size-4" /> Undo
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm disabled:opacity-40"
-          onClick={() => redo()}
-          disabled={!canRedo}
-          aria-label="Redo"
-        >
-          <Redo2 className="size-4" /> Redo
-        </button>
-        {role !== "sme" && (
-          <>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm disabled:opacity-40"
-              disabled={selectableNodeIds.length < 2}
-              onClick={() => {
-                const macroId = collapseSelectionToMacro(selectableNodeIds);
-                if (macroId) {
-                  useSelectionStore.getState().clearSelection();
+          {searchQuery.trim() && (
+            <Menu className="editor-search-results">
+              <MenuContent>
+                <MenuList>
+                  {searchHits.length === 0 ? (
+                    <MenuItem isDisabled>No matches</MenuItem>
+                  ) : (
+                    searchHits.slice(0, 8).map((node) => (
+                      <MenuItem
+                        key={node.id}
+                        description={node.type}
+                        onClick={() => {
+                          focusNode(node.id);
+                          setSearchQuery("");
+                        }}
+                      >
+                        {node.name}
+                      </MenuItem>
+                    ))
+                  )}
+                </MenuList>
+              </MenuContent>
+            </Menu>
+          )}
+        </ToolbarItem>
+        <ToolbarItem>
+          {onOpenLocalVault && (
+            <Popover
+              aria-label="Assistant model settings"
+              position="bottom-end"
+              bodyContent={<AssistantSettings onOpenVault={onOpenLocalVault} />}
+            >
+              <Button variant="control" icon={<CogIcon />} aria-label="Assistant model settings">
+                Assistant
+              </Button>
+            </Popover>
+          )}
+        </ToolbarItem>
+        <ToolbarGroup>
+          <ToolbarItem>
+            <Button variant="secondary" icon={<UndoIcon />} onClick={() => undo()} isDisabled={!canUndo} aria-label="Undo">
+              Undo
+            </Button>
+          </ToolbarItem>
+          <ToolbarItem>
+            <Button variant="secondary" icon={<RedoIcon />} onClick={() => redo()} isDisabled={!canRedo} aria-label="Redo">
+              Redo
+            </Button>
+          </ToolbarItem>
+          {role !== "sme" && (
+            <>
+              <ToolbarItem>
+                <Button
+                  variant="secondary"
+                  icon={<BoxesIcon />}
+                  isDisabled={selectableNodeIds.length < 2}
+                  onClick={() => {
+                    const macroId = collapseSelectionToMacro(selectableNodeIds);
+                    if (macroId) useSelectionStore.getState().clearSelection();
+                  }}
+                >
+                  Collapse macro
+                </Button>
+              </ToolbarItem>
+              <ToolbarItem>
+                <Button variant="secondary" icon={<TopologyIcon />} onClick={() => addSwimlane("LOCAL_WORKSTATION")}>
+                  Add swimlane
+                </Button>
+              </ToolbarItem>
+              <ToolbarItem>
+                <Button
+                  variant={lowResourceMode ? "primary" : "secondary"}
+                  icon={<TachometerAltIcon />}
+                  aria-pressed={lowResourceMode}
+                  title="Hide the minimap to reduce canvas rendering work"
+                  onClick={() => setLowResourceMode(!lowResourceMode)}
+                >
+                  {lowResourceMode ? "Low-resource view on" : "Low-resource view"}
+                </Button>
+              </ToolbarItem>
+              <ToolbarItem>
+                <fieldset className="editor-export-targets">
+                  <legend>Export deployment targets</legend>
+                  <span title="Podman Containerfile and deploy/podman/ are always included">Podman always</span>
+                  <Checkbox
+                    id="export-k8s"
+                    label="K8s"
+                    isChecked={Boolean(graph.exportConfiguration?.includeKubernetes)}
+                    onChange={(_event, checked) => setExportConfiguration({ includeKubernetes: checked })}
+                  />
+                  <Checkbox
+                    id="export-okd"
+                    label="OKD"
+                    isChecked={Boolean(graph.exportConfiguration?.includeOpenShift)}
+                    onChange={(_event, checked) =>
+                      setExportConfiguration({
+                        includeOpenShift: checked,
+                        includeKubernetes: checked ? true : graph.exportConfiguration?.includeKubernetes,
+                      })
+                    }
+                  />
+                  <Checkbox
+                    id="export-argo"
+                    label="Argo CD"
+                    isChecked={Boolean(graph.exportConfiguration?.includeArgoCd)}
+                    onChange={(_event, checked) =>
+                      setExportConfiguration({
+                        includeArgoCd: checked,
+                        includeKubernetes: checked ? true : graph.exportConfiguration?.includeKubernetes,
+                      })
+                    }
+                  />
+                  <Checkbox
+                    id="export-terraform"
+                    label="Terraform"
+                    isChecked={Boolean(graph.exportConfiguration?.includeTerraform)}
+                    onChange={(_event, checked) => setExportConfiguration({ includeTerraform: checked })}
+                  />
+                </fieldset>
+              </ToolbarItem>
+              <ToolbarItem>
+                <Button variant="secondary" icon={<KeyIcon />} onClick={() => onOpenInfrastructureTokens?.()}>
+                  Infra tokens
+                </Button>
+              </ToolbarItem>
+              <ToolbarItem>
+                <Button variant="secondary" icon={<ShieldAltIcon />} onClick={() => onOpenLocalVault?.()}>
+                  Local vault
+                </Button>
+              </ToolbarItem>
+            </>
+          )}
+          <ToolbarItem>
+            <Button variant="secondary" icon={<OutlinedSaveIcon />} onClick={() => markSaved()}>
+              Save
+            </Button>
+          </ToolbarItem>
+          <ToolbarItem>
+            <Button variant="secondary" icon={<DownloadIcon />} onClick={() => downloadGraphJson(graph)}>
+              Graph JSON
+            </Button>
+          </ToolbarItem>
+          <ToolbarItem>
+            <Button variant="secondary" icon={<FolderOpenIcon />} onClick={() => fileRef.current?.click()}>
+              Import JSON
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={async (event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const imported = await importProjectIntoLibrary(importGraphJson(text));
+                  replaceGraph(imported, false);
+                  router.push(`/editor/${imported.project.id}`);
+                } catch (error) {
+                  window.alert(
+                    error instanceof Error
+                      ? error.message
+                      : "Could not import project JSON. Check the schema version and format.",
+                  );
+                } finally {
+                  event.target.value = "";
                 }
               }}
-            >
-              <Boxes className="size-4" /> Collapse macro
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-              onClick={() => addSwimlane("LOCAL_WORKSTATION")}
-            >
-              <Map className="size-4" /> Add swimlane
-            </button>
-            <button
-              type="button"
-              aria-pressed={lowResourceMode}
-              title="Hide the minimap to reduce canvas rendering work"
-              className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-              onClick={() => setLowResourceMode(!lowResourceMode)}
-            >
-              <Gauge className="size-4" />{" "}
-              {lowResourceMode ? "Low-resource view on" : "Low-resource view"}
-            </button>
-            <fieldset className="flex flex-wrap items-center gap-2 rounded border border-[var(--athanor-mist)] px-2 py-1 text-xs">
-              <legend className="sr-only">Export deployment targets</legend>
-              <span
-                className="text-[10px] text-[var(--athanor-slate)]"
-                title="Podman Containerfile and deploy/podman/ are always included"
-              >
-                Podman always
-              </span>
-              <label className="inline-flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={Boolean(
-                    graph.exportConfiguration?.includeKubernetes,
-                  )}
-                  onChange={(event) =>
-                    setExportConfiguration({
-                      includeKubernetes: event.target.checked,
-                    })
-                  }
-                />
-                K8s
-              </label>
-              <label className="inline-flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={Boolean(graph.exportConfiguration?.includeOpenShift)}
-                  onChange={(event) =>
-                    setExportConfiguration({
-                      includeOpenShift: event.target.checked,
-                      includeKubernetes: event.target.checked
-                        ? true
-                        : graph.exportConfiguration?.includeKubernetes,
-                    })
-                  }
-                />
-                OKD
-              </label>
-              <label className="inline-flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={Boolean(graph.exportConfiguration?.includeArgoCd)}
-                  onChange={(event) =>
-                    setExportConfiguration({
-                      includeArgoCd: event.target.checked,
-                      includeKubernetes: event.target.checked
-                        ? true
-                        : graph.exportConfiguration?.includeKubernetes,
-                    })
-                  }
-                />
-                Argo CD
-              </label>
-              <label className="inline-flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={Boolean(graph.exportConfiguration?.includeTerraform)}
-                  onChange={(event) =>
-                    setExportConfiguration({
-                      includeTerraform: event.target.checked,
-                    })
-                  }
-                />
-                Terraform
-              </label>
-            </fieldset>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-              onClick={() => onOpenInfrastructureTokens?.()}
-            >
-              <KeyRound className="size-4" /> Infra tokens
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-              onClick={() => onOpenLocalVault?.()}
-            >
-              <Shield className="size-4" /> Local vault
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-          onClick={() => markSaved()}
-        >
-          <Save className="size-4" /> Save
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-          onClick={() => downloadGraphJson(graph)}
-        >
-          <Download className="size-4" /> Graph JSON
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm"
-          onClick={() => fileRef.current?.click()}
-        >
-          <FolderOpen className="size-4" /> Import JSON
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          className="hidden"
-          onChange={async (event) => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            try {
-              const text = await file.text();
-              const imported = await importProjectIntoLibrary(
-                importGraphJson(text),
-              );
-              replaceGraph(imported, false);
-              router.push(`/editor/${imported.project.id}`);
-            } catch (error) {
-              window.alert(
-                error instanceof Error
-                  ? error.message
-                  : "Could not import project JSON. Check the schema version and format.",
-              );
-            } finally {
-              event.target.value = "";
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="rounded border px-3 py-1.5 text-sm"
-          disabled={exporting}
-          onClick={async () => {
-            setExporting(true);
-            try {
-              await downloadHandoff(useProjectStore.getState().graph);
-            } catch (error) {
-              await validateCurrentProject("design");
-              setError(
-                error instanceof Error ? error.message : "Handoff failed",
-              );
-            } finally {
-              setExporting(false);
-            }
-          }}
-        >
-          Export build brief
-        </button>
-        {role !== "sme" && (
-          <>
-            <label className="inline-flex items-center gap-2 text-xs">
-              Export as
-              <select
-                aria-label="Export format"
-                value={exportFormat}
-                onChange={(event) =>
-                  setExportFormat(
-                    event.target.value as NonNullable<
-                      ExportOptions["exportFormat"]
-                    >,
-                  )
-                }
-                className="rounded border border-[var(--athanor-mist)] bg-white px-2 py-1.5 text-sm"
-              >
-                <option value="code">Source code</option>
-                <option value="helm">Helm Chart</option>
-                <option value="podman">Podman container</option>
-                <option value="docker">Docker container</option>
-                <option value="openshift">OpenShift deployment</option>
-                <option value="npm">npm package</option>
-                <option value="makefile">Makefiles</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded border border-[var(--athanor-mist)] px-2.5 py-1.5 text-sm disabled:opacity-40"
-              disabled={exporting}
+            />
+          </ToolbarItem>
+          <ToolbarItem>
+            <Button
+              variant="secondary"
+              isDisabled={exporting}
               onClick={async () => {
                 setExporting(true);
                 try {
-                  const submitted = useProjectStore.getState().graph;
-                  const result = await exportProject(submitted, {
-                    exportFormat,
-                  });
-                  downloadExportZip(result);
-                  if (useProjectStore.getState().graph === submitted)
-                    setResult(true, result.validationIssues, result.durationMs);
+                  await downloadHandoff(useProjectStore.getState().graph);
                 } catch (error) {
-                  setError(
-                    error instanceof Error
-                      ? error.message
-                      : "Export failed. Validate the graph and confirm the API is running.",
-                  );
+                  await validateCurrentProject("design");
+                  setError(error instanceof Error ? error.message : "Handoff failed");
                 } finally {
                   setExporting(false);
                 }
               }}
             >
-              <Package className="size-4" />{" "}
-              {exporting ? "Exporting…" : "Export"}
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded bg-[var(--athanor-ember)] px-3 py-1.5 text-sm text-white"
-              onClick={async () => {
-                setExecRunning();
-                try {
-                  const result = await executeProject(
-                    useProjectStore.getState().graph,
-                  );
-                  setExecResult({
-                    status: result.status,
-                    steps: result.steps,
-                    edgePayloads: result.edgePayloads,
-                    finalOutputs: result.finalOutputs,
-                    durationMs: result.durationMs,
-                  });
-                } catch (error) {
-                  setExecError(
-                    error instanceof Error
-                      ? error.message
-                      : "Unable to execute. Is make dev running?",
-                  );
-                }
-              }}
+              Export build brief
+            </Button>
+          </ToolbarItem>
+          {role !== "sme" && (
+            <>
+              <ToolbarItem>
+                <FormSelect
+                  aria-label="Export format"
+                  value={exportFormat}
+                  onChange={(_event, value) =>
+                    setExportFormat(value as NonNullable<ExportOptions["exportFormat"]>)
+                  }
+                >
+                  {FORMATS.map((format) => (
+                    <FormSelectOption key={format.value} value={format.value} label={format.label} />
+                  ))}
+                </FormSelect>
+              </ToolbarItem>
+              <ToolbarItem>
+                <Button
+                  variant="secondary"
+                  icon={<UploadIcon />}
+                  isDisabled={exporting}
+                  onClick={async () => {
+                    setExporting(true);
+                    try {
+                      const submitted = useProjectStore.getState().graph;
+                      const result = await exportProject(submitted, { exportFormat });
+                      downloadExportZip(result);
+                      if (useProjectStore.getState().graph === submitted) {
+                        setResult(true, result.validationIssues, result.durationMs);
+                      }
+                    } catch (error) {
+                      setError(
+                        error instanceof Error
+                          ? error.message
+                          : "Export failed. Validate the graph and confirm the API is running.",
+                      );
+                    } finally {
+                      setExporting(false);
+                    }
+                  }}
+                >
+                  {exporting ? "Exporting…" : "Export"}
+                </Button>
+              </ToolbarItem>
+              <ToolbarItem>
+                <Button
+                  variant="primary"
+                  icon={<PlayIcon />}
+                  onClick={async () => {
+                    setExecRunning();
+                    try {
+                      const result = await executeProject(useProjectStore.getState().graph);
+                      setExecResult({
+                        status: result.status,
+                        steps: result.steps,
+                        edgePayloads: result.edgePayloads,
+                        finalOutputs: result.finalOutputs,
+                        durationMs: result.durationMs,
+                      });
+                    } catch (error) {
+                      setExecError(
+                        error instanceof Error ? error.message : "Unable to execute. Is make dev running?",
+                      );
+                    }
+                  }}
+                >
+                  Run preview
+                </Button>
+              </ToolbarItem>
+            </>
+          )}
+          <ToolbarItem>
+            <Button
+              variant="primary"
+              icon={<ShieldAltIcon />}
+              onClick={() => void validateCurrentProject(role === "sme" ? "design" : "deployment")}
             >
-              <Play className="size-4" /> Run preview
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm text-white"
-          onClick={() =>
-            void validateCurrentProject(
-              role === "sme" ? "design" : "deployment",
-            )
-          }
-        >
-          <ShieldCheck className="size-4" /> Validate
-        </button>
-      </div>
-    </header>
+              Validate
+            </Button>
+          </ToolbarItem>
+        </ToolbarGroup>
+      </ToolbarContent>
+    </Toolbar>
   );
 }

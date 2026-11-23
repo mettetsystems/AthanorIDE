@@ -3,82 +3,99 @@
 /**
  * Bottom panel listing Validate issues with focus navigation.
  */
+import { useEffect, useState } from "react";
+import {
+  Button,
+  ExpandableSection,
+  Label,
+  Panel,
+  PanelMain,
+  PanelMainBody,
+} from "@patternfly/react-core";
+
 import { useValidationStore } from "@/store/validation-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { taskFlowId } from "@/lib/workflow";
 import { transitionFlowId } from "@/components/workflow/WorkflowCanvas";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
-import { cn } from "@/lib/cn";
 
 export function ValidationPanel() {
   const { issues, valid, status, errorMessage, durationMs } = useValidationStore();
   const focusNode = useSelectionStore((state) => state.focusNode);
   const focusEdge = useSelectionStore((state) => state.focusEdge);
+  const [expanded, setExpanded] = useState(status !== "idle");
+
+  useEffect(() => {
+    if (status !== "idle") setExpanded(true);
+  }, [status]);
+
+  const summary =
+    status === "idle"
+      ? "Not validated yet"
+      : status === "running"
+        ? "Validating…"
+        : status === "done"
+          ? valid
+            ? `Valid${durationMs != null ? ` · ${durationMs.toFixed(1)} ms` : ""}`
+            : `${issues.filter((issue) => issue.severity === "error").length} error(s)`
+          : (errorMessage ?? "Validation failed");
 
   return (
-    <details
-      open={status !== "idle"}
-      className="shrink-0 max-h-[30vh] overflow-auto border-t border-[var(--athanor-mist)] bg-white/90 px-4 py-2"
-      aria-live="polite"
-      aria-label="Validation results"
-    >
-      <summary className="flex cursor-pointer items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Validation</h2>
-        <p className="text-xs text-[var(--athanor-slate)]">
-          {status === "idle" && "Not validated yet"}
-          {status === "running" && "Validating…"}
-          {status === "done" &&
-            (valid
-              ? `Valid${durationMs != null ? ` · ${durationMs.toFixed(1)} ms` : ""}`
-              : `${issues.filter((i) => i.severity === "error").length} error(s)`)}
-          {status === "error" && (errorMessage ?? "Validation failed")}
-        </p>
-      </summary>
-
-      {issues.length === 0 ? (
-        <p className="text-sm text-[var(--athanor-slate)]">
-          {status === "done" && valid
-            ? "No issues. Architecture checks passed."
-            : "Run Validate to check configuration, contracts, portals, and deployment boundaries."}
-        </p>
-      ) : (
-        <ul className="max-h-36 space-y-2 overflow-auto">
-          {issues.map((issue) => (
-            <li key={issue.id}>
-              <button
-                type="button"
-                className={cn(
-                  "w-full rounded border px-3 py-2 text-left text-sm",
-                  issue.severity === "error"
-                    ? "border-red-200 bg-red-50"
-                    : issue.severity === "warning"
-                      ? "border-amber-200 bg-amber-50"
-                      : "border-[var(--athanor-mist)] bg-white",
-                )}
-                onClick={() => {
-                  if (issue.nodeId) focusNode(issue.nodeId);
-                  else if (issue.edgeId) focusEdge(issue.edgeId);
-                  else if (issue.taskId) focusNode(taskFlowId(issue.taskId));
-                  else if (issue.transitionId) { useUiPreferencesStore.getState().setWorkspaceRole("sme"); focusEdge(transitionFlowId(issue.transitionId)); }
-                }}
-                disabled={!issue.nodeId && !issue.edgeId && !issue.taskId && !issue.transitionId}
-              >
-                <span className="font-medium uppercase tracking-wide text-xs">
-                  {issue.severity} · {issue.code}
-                </span>
-                <span className="mt-1 block">{issue.message}</span>
-                {issue.portId && <span className="block text-xs">Port: {issue.portId}</span>}
-                {issue.fieldPath && <span className="block break-all text-xs">{issue.fieldPath}</span>}
-                {issue.suggestedAction && (
-                  <span className="mt-1 block text-xs text-[var(--athanor-slate)]">
-                    Suggested: {issue.suggestedAction}
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </details>
+    <Panel aria-live="polite" aria-label="Validation results">
+      <PanelMain>
+        <ExpandableSection
+          isExpanded={expanded}
+          onToggle={(_event, isExpanded) => setExpanded(isExpanded)}
+          toggleText={`Validation · ${summary}`}
+        >
+          <PanelMainBody>
+            {issues.length === 0 ? (
+              <p>
+                {status === "done" && valid
+                  ? "No issues. Architecture checks passed."
+                  : "Run Validate to check configuration, contracts, portals, and deployment boundaries."}
+              </p>
+            ) : (
+              <ul className="editor-scroll">
+                {issues.map((issue) => (
+                  <li key={issue.id}>
+                    <Button
+                      variant="secondary"
+                      isBlock
+                      isDisabled={!issue.nodeId && !issue.edgeId && !issue.taskId && !issue.transitionId}
+                      onClick={() => {
+                        if (issue.nodeId) focusNode(issue.nodeId);
+                        else if (issue.edgeId) focusEdge(issue.edgeId);
+                        else if (issue.taskId) focusNode(taskFlowId(issue.taskId));
+                        else if (issue.transitionId) {
+                          useUiPreferencesStore.getState().setWorkspaceRole("sme");
+                          focusEdge(transitionFlowId(issue.transitionId));
+                        }
+                      }}
+                    >
+                      <Label
+                        color={
+                          issue.severity === "error"
+                            ? "red"
+                            : issue.severity === "warning"
+                              ? "orange"
+                              : "blue"
+                        }
+                      >
+                        {issue.severity} · {issue.code}
+                      </Label>
+                      <span>{issue.message}</span>
+                      {issue.portId && <span>Port: {issue.portId}</span>}
+                      {issue.fieldPath && <span>{issue.fieldPath}</span>}
+                      {issue.suggestedAction && <span>Suggested: {issue.suggestedAction}</span>}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </PanelMainBody>
+        </ExpandableSection>
+      </PanelMain>
+    </Panel>
   );
 }

@@ -1,98 +1,80 @@
 "use client";
 import { useState } from "react";
 import {
+  Alert,
+  Button,
+  ExpandableSection,
+  Form,
+  FormGroup,
+  FormSelect,
+  FormSelectOption,
+  TextInput,
+  Title,
+} from "@patternfly/react-core";
+import {
   taskInstructions,
   type ArchitectureGraph,
   type WorkflowTask,
 } from "@athanor/contracts";
+
+import { validateCurrentProject } from "@/lib/validate";
+import {
+  disconnectedCandidates,
+  isExecutable,
+  optionalPortCandidates,
+  parseTaskFlowId,
+  pruneOptionalPorts,
+  restoreOptionalPorts,
+  taskFlowId,
+} from "@/lib/workflow";
 import { useProjectStore } from "@/store/project-store";
 import { useSelectionStore } from "@/store/selection-store";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
-import {
-  disconnectedCandidates,
-  optionalPortCandidates,
-  pruneOptionalPorts,
-  restoreOptionalPorts,
-  parseTaskFlowId,
-  taskFlowId,
-  isExecutable,
-} from "@/lib/workflow";
-import { validateCurrentProject } from "@/lib/validate";
 import { BriefField } from "./TaskNode";
 import { parseTransitionFlowId } from "./WorkflowCanvas";
-const field = "mt-1 w-full rounded border bg-white px-2 py-1.5 text-sm";
-const button = "rounded border px-3 py-1.5 text-xs hover:bg-slate-50";
 
-export function PruneControls({
-  nodeId,
-  taskId,
-}: {
-  nodeId?: string;
-  taskId?: string;
-}) {
+export function PruneControls({ nodeId, taskId }: { nodeId?: string; taskId?: string }) {
   const graph = useProjectStore((s) => s.graph);
-  const [preview, setPreview] = useState<{
-    graph: ArchitectureGraph;
-    names: string[];
-  } | null>(null);
+  const [preview, setPreview] = useState<{ graph: ArchitectureGraph; names: string[] } | null>(null);
   const names = nodeId
-    ? optionalPortCandidates(graph, nodeId).map(
-        (p) => `${p.direction}: ${p.name} (${p.id})`,
-      )
-    : disconnectedCandidates(graph, taskId!).map((n) => `${n.name} (${n.id})`);
+    ? optionalPortCandidates(graph, nodeId).map((port) => `${port.direction}: ${port.name} (${port.id})`)
+    : disconnectedCandidates(graph, taskId!).map((node) => `${node.name} (${node.id})`);
   return (
-    <div className="space-y-2 border-t pt-3">
-      <button
-        className={button}
-        disabled={!names.length}
-        onClick={() => setPreview({ graph, names })}
-      >
-        {nodeId ? "Prune unused ports" : "Prune disconnected components"} (
-        {names.length})
-      </button>
+    <div>
+      <Button variant="secondary" isDisabled={!names.length} onClick={() => setPreview({ graph, names })}>
+        {nodeId ? "Prune unused ports" : "Prune disconnected components"} ({names.length})
+      </Button>
       {nodeId && (
-        <button
-          className={button}
-          disabled={!graph.nodes.find((n) => n.id === nodeId)?.prunedPorts}
+        <Button
+          variant="secondary"
+          isDisabled={!graph.nodes.find((node) => node.id === nodeId)?.prunedPorts}
           onClick={() => {
-            useProjectStore
-              .getState()
-              .mutateGraph((g) => restoreOptionalPorts(g, nodeId));
+            useProjectStore.getState().mutateGraph((next) => restoreOptionalPorts(next, nodeId));
             void validateCurrentProject();
           }}
         >
           Restore optional ports
-        </button>
+        </Button>
       )}
       {preview && (
-        <section
-          role="dialog"
-          aria-label="Pruning preview"
-          className="space-y-2 rounded border border-amber-300 bg-amber-50 p-3 text-xs"
-        >
-          <p className="font-semibold">Remove these items</p>
-          <ul className="list-inside list-disc">
-            {preview.names.map((n) => (
-              <li key={n}>{n}</li>
+        <Alert variant="warning" isInline title="Remove these items" aria-label="Pruning preview">
+          <ul>
+            {preview.names.map((name) => (
+              <li key={name}>{name}</li>
             ))}
           </ul>
-          {preview.graph !== graph && (
-            <p>Project changed. Open a fresh preview before pruning.</p>
-          )}
-          <button
-            className={button}
-            disabled={preview.graph !== graph}
+          {preview.graph !== graph && <p>Project changed. Open a fresh preview before pruning.</p>}
+          <Button
+            variant="danger"
+            isDisabled={preview.graph !== graph}
             onClick={() => {
-              useProjectStore.getState().mutateGraph((g) =>
+              useProjectStore.getState().mutateGraph((next) =>
                 nodeId
-                  ? pruneOptionalPorts(g, nodeId)
+                  ? pruneOptionalPorts(next, nodeId)
                   : {
-                      ...g,
-                      nodes: g.nodes.filter(
-                        (n) =>
-                          !disconnectedCandidates(g, taskId!).some(
-                            (c) => c.id === n.id,
-                          ),
+                      ...next,
+                      nodes: next.nodes.filter(
+                        (node) => !disconnectedCandidates(next, taskId!).some((candidate) => candidate.id === node.id),
                       ),
                     },
               );
@@ -101,287 +83,248 @@ export function PruneControls({
             }}
           >
             Apply pruning
-          </button>{" "}
-          <button className={button} onClick={() => setPreview(null)}>
-            Cancel
-          </button>
-          <p>
-            Required ports, task boundaries, and linked components are
-            preserved. Undo restores removals.
-          </p>
-        </section>
+          </Button>
+          <Button variant="link" onClick={() => setPreview(null)}>Cancel</Button>
+          <p>Required ports, task boundaries, and linked components are preserved. Undo restores removals.</p>
+        </Alert>
       )}
     </div>
   );
 }
+
 function Boundaries({ task }: { task: WorkflowTask }) {
   const graph = useProjectStore((s) => s.graph);
-  const members = graph.nodes.filter((n) => n.workflowTaskId === task.id);
+  const members = graph.nodes.filter((node) => node.workflowTaskId === task.id);
   return (
-    <div className="space-y-2">
+    <Form>
       {(["inputBinding", "outputBinding"] as const).map((key) => (
-        <label className="block text-xs font-medium" key={key}>
-          {key === "inputBinding"
-            ? "Workflow input boundary"
-            : "Task result boundary"}
-          <select
-            className={field}
+        <FormGroup
+          key={key}
+          label={key === "inputBinding" ? "Workflow input boundary" : "Task result boundary"}
+          fieldId={key}
+        >
+          <FormSelect
+            id={key}
             value={task[key] ? JSON.stringify(task[key]) : ""}
-            onChange={(e) =>
+            onChange={(_event, value) =>
               useProjectStore.getState().updateTask(task.id, {
-                [key]: e.target.value ? JSON.parse(e.target.value) : undefined,
+                [key]: value ? JSON.parse(value) : undefined,
               })
             }
           >
-            <option value="">Choose a string port…</option>
-            {members.flatMap((n) =>
-              n[key === "inputBinding" ? "inputs" : "outputs"]
-                .filter((p) => p.contractType === "STRING")
-                .map((p) => (
-                  <option
-                    key={`${n.id}:${p.id}`}
-                    value={JSON.stringify({ nodeId: n.id, portId: p.id })}
-                  >
-                    {n.name} · {p.name}
-                  </option>
+            <FormSelectOption value="" label="Choose a string port…" />
+            {members.flatMap((node) =>
+              node[key === "inputBinding" ? "inputs" : "outputs"]
+                .filter((port) => port.contractType === "STRING")
+                .map((port) => (
+                  <FormSelectOption
+                    key={`${node.id}:${port.id}`}
+                    value={JSON.stringify({ nodeId: node.id, portId: port.id })}
+                    label={`${node.name} · ${port.name}`}
+                  />
                 )),
             )}
-          </select>
-        </label>
+          </FormSelect>
+        </FormGroup>
       ))}
-      <p className="text-xs text-slate-500">
-        The workflow supplies the input boundary. Remove any component wire into
-        that port.
-      </p>
-    </div>
+      <p>The workflow supplies the input boundary. Remove any component wire into that port.</p>
+    </Form>
   );
 }
+
 export function WorkflowInspector() {
   const graph = useProjectStore((s) => s.graph);
   const { updateTask, cloneTask, removeTask, mutateGraph } = useProjectStore();
   const selected = useSelectionStore();
   const role = useUiPreferencesStore((s) => s.workspaceRole);
   const taskId = parseTaskFlowId(selected.selectedNodeIds[0] ?? "");
-  const task = graph.workflow.tasks.find((t) => t.id === taskId);
+  const task = graph.workflow.tasks.find((item) => item.id === taskId);
   const edgeId = parseTransitionFlowId(selected.selectedEdgeIds[0] ?? "");
-  const edge = graph.workflow.transitions.find((e) => e.id === edgeId);
-  if (edge)
+  const edge = graph.workflow.transitions.find((item) => item.id === edgeId);
+  if (edge) {
     return (
-      <aside aria-label="Workflow connection" className="space-y-3 p-4">
-        <h2 className="font-semibold">Workflow connection</h2>
-        <p className="text-xs">
-          {graph.workflow.tasks.find((t) => t.id === edge.sourceTaskId)?.name ??
-            "Start"}{" "}
-          → {graph.workflow.tasks.find((t) => t.id === edge.targetTaskId)?.name}
+      <aside aria-label="Workflow connection">
+        <Title headingLevel="h2">Workflow connection</Title>
+        <p>
+          {graph.workflow.tasks.find((item) => item.id === edge.sourceTaskId)?.name ?? "Start"} →{" "}
+          {graph.workflow.tasks.find((item) => item.id === edge.targetTaskId)?.name}
         </p>
-        <label className="block text-xs">
-          Path type
-          <select
-            className={field}
-            value={edge.kind}
-            onChange={(e) =>
-              mutateGraph((g) => ({
-                ...g,
-                workflow: {
-                  ...g.workflow,
-                  transitions: g.workflow.transitions.map((t) =>
-                    t.id === edge.id
-                      ? {
-                          ...t,
-                          kind: e.target.value as "normal" | "recovery",
-                          stage:
-                            e.target.value === "recovery"
-                              ? (g.workflow.transitions.find(
-                                  (n) =>
-                                    n.kind === "normal" &&
-                                    n.targetTaskId === edge.sourceTaskId,
-                                )?.stage ?? 1)
-                              : t.stage,
-                        }
-                      : t,
-                  ),
-                },
-              }))
-            }
-          >
-            <option value="normal">Normal stage</option>
-            <option value="recovery" disabled={edge.sourceTaskId === null}>
-              Failure recovery (A)
-            </option>
-          </select>
-        </label>
-        <label className="block text-xs">
-          {edge.kind === "recovery" ? "Failed task stage" : "Stage number"}
-          <input
-            className={field}
-            type="number"
-            min={1}
-            value={edge.stage}
-            onChange={(e) => {
-              const stage = Number(e.target.value);
-              if (Number.isInteger(stage) && stage > 0)
-                mutateGraph((g) => ({
-                  ...g,
+        <Form>
+          <FormGroup label="Path type" fieldId="transition-kind">
+            <FormSelect
+              id="transition-kind"
+              value={edge.kind}
+              onChange={(_event, value) =>
+                mutateGraph((next) => ({
+                  ...next,
                   workflow: {
-                    ...g.workflow,
-                    transitions: g.workflow.transitions.map((t) =>
-                      t.id === edge.id ? { ...t, stage } : t,
+                    ...next.workflow,
+                    transitions: next.workflow.transitions.map((item) =>
+                      item.id === edge.id
+                        ? {
+                            ...item,
+                            kind: value as "normal" | "recovery",
+                            stage:
+                              value === "recovery"
+                                ? (next.workflow.transitions.find(
+                                    (candidate) =>
+                                      candidate.kind === "normal" && candidate.targetTaskId === edge.sourceTaskId,
+                                  )?.stage ?? 1)
+                                : item.stage,
+                          }
+                        : item,
                     ),
                   },
-                }));
-            }}
-          />
-        </label>
+                }))
+              }
+            >
+              <FormSelectOption value="normal" label="Normal stage" />
+              <FormSelectOption value="recovery" label="Failure recovery (A)" isDisabled={edge.sourceTaskId === null} />
+            </FormSelect>
+          </FormGroup>
+          <FormGroup label={edge.kind === "recovery" ? "Failed task stage" : "Stage number"} fieldId="transition-stage">
+            <TextInput
+              id="transition-stage"
+              type="number"
+              min={1}
+              value={edge.stage}
+              onChange={(_event, value) => {
+                const stage = Number(value);
+                if (Number.isInteger(stage) && stage > 0) {
+                  mutateGraph((next) => ({
+                    ...next,
+                    workflow: {
+                      ...next.workflow,
+                      transitions: next.workflow.transitions.map((item) =>
+                        item.id === edge.id ? { ...item, stage } : item,
+                      ),
+                    },
+                  }));
+                }
+              }}
+            />
+          </FormGroup>
+        </Form>
         {edge.kind === "recovery" && (
           <BriefField
             label="Recovery behavior"
             value={edge.recoveryDescription}
             onSave={(recoveryDescription) =>
-              mutateGraph((g) => ({
-                ...g,
+              mutateGraph((next) => ({
+                ...next,
                 workflow: {
-                  ...g.workflow,
-                  transitions: g.workflow.transitions.map((t) =>
-                    t.id === edge.id ? { ...t, recoveryDescription } : t,
+                  ...next.workflow,
+                  transitions: next.workflow.transitions.map((item) =>
+                    item.id === edge.id ? { ...item, recoveryDescription } : item,
                   ),
                 },
               }))
             }
           />
         )}
-        <p className="text-xs text-slate-500">
-          Equal numbers run in parallel. Recovery replaces the failed task’s
-          result and resumes its normal path.
-        </p>
-        <button
-          className={button}
+        <p>Equal numbers run in parallel. Recovery replaces the failed task’s result and resumes its normal path.</p>
+        <Button
+          variant="danger"
           onClick={() => {
-            mutateGraph((g) => ({
-              ...g,
+            mutateGraph((next) => ({
+              ...next,
               workflow: {
-                ...g.workflow,
-                transitions: g.workflow.transitions.filter(
-                  (t) => t.id !== edge.id,
-                ),
+                ...next.workflow,
+                transitions: next.workflow.transitions.filter((item) => item.id !== edge.id),
               },
             }));
             selected.clearSelection();
           }}
         >
           Delete connection
-        </button>
+        </Button>
       </aside>
     );
-  if (task)
+  }
+  if (task) {
     return (
-      <aside aria-label="Workflow task" className="space-y-3 p-4">
-        <h2 className="font-semibold">Task brief</h2>
-        <label className="block text-xs">
-          Task name
-          <input
-            className={field}
-            value={task.name}
-            onChange={(e) =>
-              updateTask(task.id, { name: e.target.value || "Untitled task" })
-            }
-          />
-        </label>
-        <label className="flex items-center gap-3 text-xs">
-          Color
-          <input
-            aria-label="Task color"
-            type="color"
-            value={task.color}
-            onChange={(e) => updateTask(task.id, { color: e.target.value })}
-          />
-        </label>
+      <aside aria-label="Workflow task">
+        <Title headingLevel="h2">Task brief</Title>
+        <Form>
+          <FormGroup label="Task name" fieldId="task-name">
+            <TextInput
+              id="task-name"
+              value={task.name}
+              onChange={(_event, value) => updateTask(task.id, { name: value || "Untitled task" })}
+            />
+          </FormGroup>
+          <FormGroup label="Color" fieldId="task-color">
+            <input
+              id="task-color"
+              aria-label="Task color"
+              type="color"
+              value={task.color}
+              onChange={(event) => updateTask(task.id, { color: event.target.value })}
+            />
+          </FormGroup>
+        </Form>
         {role !== "sme" && (
           <>
-            <p className="whitespace-pre-wrap text-xs text-slate-600">
-              {taskInstructions(task)}
-            </p>
+            <p>{taskInstructions(task)}</p>
             <Boundaries task={task} />
           </>
         )}
-        <div className="flex gap-2">
-          <button className={button} onClick={() => cloneTask(task.id)}>
-            Clone brief
-          </button>
-          <button
-            className={button}
-            onClick={() => {
-              removeTask(task.id);
-              selected.clearSelection();
-            }}
-          >
-            Delete task
-          </button>
-        </div>
-        <p className="text-xs text-slate-500">
-          Deleting a task unassigns its components.
-        </p>
+        <Button variant="secondary" onClick={() => cloneTask(task.id)}>Clone brief</Button>
+        <Button
+          variant="danger"
+          onClick={() => {
+            removeTask(task.id);
+            selected.clearSelection();
+          }}
+        >
+          Delete task
+        </Button>
+        <p>Deleting a task unassigns its components.</p>
         {role === "security" && <PruneControls key={task.id} taskId={task.id} />}
       </aside>
     );
+  }
   return (
-    <aside aria-label="Workflow overview" className="space-y-3 p-4">
-      <h2 className="font-semibold">Workflow overview</h2>
-      <p className="text-xs text-slate-600">
-        Draw task boxes, define their briefs, and connect Start to stage 1. Final normal branches automatically connect to End; completion waits for all branches.
-        Select a connection to edit its stage or recovery path.
+    <aside aria-label="Workflow overview">
+      <Title headingLevel="h2">Workflow overview</Title>
+      <p>
+        Draw task boxes, define their briefs, and connect Start to stage 1. Final normal branches automatically connect to End; completion waits for all branches. Select a connection to edit its stage or recovery path.
       </p>
       <BriefField
         label="Workflow input"
         value={graph.workflow.input}
-        onSave={(input) =>
-          mutateGraph((g) => ({ ...g, workflow: { ...g.workflow, input } }))
-        }
+        onSave={(input) => mutateGraph((next) => ({ ...next, workflow: { ...next.workflow, input } }))}
       />
-      <label className="block text-xs">
-        Maximum parallel tasks
-        <input
-          type="number"
-          min={1}
-          max={32}
-          className={field}
-          value={graph.workflow.maxParallelTasks}
-          onChange={(e) => {
-            const maxParallelTasks = Number(e.target.value);
-            if (
-              Number.isInteger(maxParallelTasks) &&
-              maxParallelTasks >= 1 &&
-              maxParallelTasks <= 32
-            )
-              mutateGraph((g) => ({
-                ...g,
-                workflow: { ...g.workflow, maxParallelTasks },
-              }));
-          }}
-        />
-      </label>
-      <p className="text-xs font-medium">
-        Planned stages · no endpoints are called
-      </p>
-      <ul className="space-y-2">
-        {graph.workflow.tasks.map((t) => {
-          const paths = graph.workflow.transitions.filter(
-            (e) => e.targetTaskId === t.id,
-          );
+      <Form>
+        <FormGroup label="Maximum parallel tasks" fieldId="max-parallel">
+          <TextInput
+            id="max-parallel"
+            type="number"
+            min={1}
+            max={32}
+            value={graph.workflow.maxParallelTasks}
+            onChange={(_event, value) => {
+              const maxParallelTasks = Number(value);
+              if (Number.isInteger(maxParallelTasks) && maxParallelTasks >= 1 && maxParallelTasks <= 32) {
+                mutateGraph((next) => ({
+                  ...next,
+                  workflow: { ...next.workflow, maxParallelTasks },
+                }));
+              }
+            }}
+          />
+        </FormGroup>
+      </Form>
+      <p>Planned stages · no endpoints are called</p>
+      <ul>
+        {graph.workflow.tasks.map((item) => {
+          const paths = graph.workflow.transitions.filter((transition) => transition.targetTaskId === item.id);
           return (
-            <li key={t.id}>
-              <button
-                className="text-left text-sm underline decoration-slate-300"
-                onClick={() => selected.focusNode(taskFlowId(t.id))}
-              >
-                <span style={{ color: t.color }}>●</span> {t.name} ·{" "}
-                {[
-                  ...new Set(
-                    paths.map(
-                      (e) => `${e.kind === "recovery" ? "A" : ""}${e.stage}`,
-                    ),
-                  ),
-                ].join(", ") || "Unconnected"}
-              </button>
+            <li key={item.id}>
+              <Button variant="link" onClick={() => selected.focusNode(taskFlowId(item.id))}>
+                <span style={{ color: item.color }}>●</span> {item.name} ·{" "}
+                {[...new Set(paths.map((transition) => `${transition.kind === "recovery" ? "A" : ""}${transition.stage}`))].join(", ") || "Unconnected"}
+              </Button>
             </li>
           );
         })}
@@ -389,102 +332,80 @@ export function WorkflowInspector() {
     </aside>
   );
 }
+
 export function ComponentWorkflowControls() {
   const graph = useProjectStore((s) => s.graph);
   const ids = useSelectionStore((s) => s.selectedNodeIds);
   const role = useUiPreferencesStore((s) => s.workspaceRole);
-  const nodes = graph.nodes.filter((n) => ids.includes(n.id));
+  const nodes = graph.nodes.filter((node) => ids.includes(node.id));
   if (!nodes.length) return null;
   const node = nodes.length === 1 ? nodes[0] : undefined;
-  const task = graph.workflow.tasks.find((t) => t.id === node?.workflowTaskId);
+  const task = graph.workflow.tasks.find((item) => item.id === node?.workflowTaskId);
   return (
-    <section
-      aria-label="Task membership and instructions"
-      className="space-y-3 border-b p-4"
-    >
-      <label className="block text-xs font-semibold">
-        Task group
-        <select
-          className={field}
-          value={
-            nodes.every((n) => n.workflowTaskId === nodes[0]?.workflowTaskId)
-              ? (nodes[0]?.workflowTaskId ?? "")
-              : "mixed"
-          }
-          onChange={(e) =>
-            useProjectStore.getState().assignTask(
-              nodes.map((n) => n.id),
-              e.target.value || undefined,
-            )
-          }
-        >
-          <option value="">Shared / unassigned</option>
-          <option value="mixed" disabled>
-            Multiple groups
-          </option>
-          {graph.workflow.tasks.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </label>
+    <section aria-label="Task membership and instructions">
+      <Form>
+        <FormGroup label="Task group" fieldId="task-group">
+          <FormSelect
+            id="task-group"
+            value={
+              nodes.every((item) => item.workflowTaskId === nodes[0]?.workflowTaskId)
+                ? (nodes[0]?.workflowTaskId ?? "")
+                : "mixed"
+            }
+            onChange={(_event, value) =>
+              useProjectStore.getState().assignTask(nodes.map((item) => item.id), value || undefined)
+            }
+          >
+            <FormSelectOption value="" label="Shared / unassigned" />
+            <FormSelectOption value="mixed" label="Multiple groups" isDisabled />
+            {graph.workflow.tasks.map((item) => (
+              <FormSelectOption key={item.id} value={item.id} label={item.name} />
+            ))}
+          </FormSelect>
+        </FormGroup>
+      </Form>
       {node && task && isExecutable(node.type) && (
         <>
-          <p
-            className={`text-xs font-medium ${node.instructionMode === "override" ? "text-amber-800" : "text-emerald-800"}`}
-          >
+          <p>
             {node.instructionMode === "override"
               ? "Instruction override · AgentOpSec review"
               : "Instructions inherited from SME"}
           </p>
-          <button
-            className={button}
+          <Button
+            variant="secondary"
             onClick={() =>
-              useProjectStore.getState().mutateGraph((g) => ({
-                ...g,
-                nodes: g.nodes.map((n) =>
-                  n.id === node.id
+              useProjectStore.getState().mutateGraph((next) => ({
+                ...next,
+                nodes: next.nodes.map((item) =>
+                  item.id === node.id
                     ? {
-                        ...n,
-                        instructionMode:
-                          n.instructionMode === "override"
-                            ? "inherit"
-                            : "override",
+                        ...item,
+                        instructionMode: item.instructionMode === "override" ? "inherit" : "override",
                         configuration: {
-                          ...n.configuration,
+                          ...item.configuration,
                           instructions:
-                            n.instructionMode === "override"
-                              ? n.configuration.instructions
+                            item.instructionMode === "override"
+                              ? item.configuration.instructions
                               : taskInstructions(task),
                         },
                       }
-                    : n,
+                    : item,
                 ),
               }))
             }
           >
-            {node.instructionMode === "override"
-              ? "Restore SME instructions"
-              : "Override instructions"}
-          </button>
-          <details open={role === "security"}>
-            <summary className="cursor-pointer text-xs">
-              SME brief and effective instructions
-            </summary>
-            <h3 className="mt-2 text-xs font-semibold">SME brief</h3>
-            <pre className="whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs">
-              {taskInstructions(task)}
-            </pre>
-            <h3 className="mt-2 text-xs font-semibold">
-              Effective instructions
-            </h3>
-            <pre className="whitespace-pre-wrap rounded bg-slate-50 p-2 text-xs">
+            {node.instructionMode === "override" ? "Restore SME instructions" : "Override instructions"}
+          </Button>
+          <ExpandableSection toggleText="SME brief and effective instructions" isExpanded={role === "security"}>
+            <Title headingLevel="h3">SME brief</Title>
+            <pre>{taskInstructions(task)}</pre>
+            <Title headingLevel="h3">Effective instructions</Title>
+            <pre>
               {node.instructionMode === "override"
                 ? String(node.configuration.instructions ?? "")
                 : taskInstructions(task)}
             </pre>
-          </details>
+          </ExpandableSection>
         </>
       )}
       {node && role === "security" && <PruneControls key={node.id} nodeId={node.id} />}

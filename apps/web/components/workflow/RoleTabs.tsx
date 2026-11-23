@@ -1,9 +1,12 @@
 "use client";
+import { Tab, TabTitleText, Tabs } from "@patternfly/react-core";
+
 import {
   useUiPreferencesStore,
   type WorkspaceRole,
 } from "@/store/ui-preferences-store";
 import { useSelectionStore } from "@/store/selection-store";
+
 export const ROLES: {
   id: WorkspaceRole;
   label: string;
@@ -25,6 +28,7 @@ export const ROLES: {
     description: "Review controls, overrides, and unused connections",
   },
 ];
+
 export function RoleTabs() {
   const role = useUiPreferencesStore((s) => s.workspaceRole);
   const select = (next: WorkspaceRole) => {
@@ -32,44 +36,21 @@ export function RoleTabs() {
     useUiPreferencesStore.getState().setWorkspaceRole(next);
   };
   return (
-    <nav
-      aria-label="Workspace roles"
-      className="shrink-0 border-b bg-white px-3"
+    <Tabs
+      activeKey={role}
+      onSelect={(_event, key) => select(key as WorkspaceRole)}
+      aria-label="Role views"
+      id="role-tabs"
     >
-      <div
-        role="tablist"
-        aria-label="Role views"
-        className="flex overflow-x-auto"
-      >
-        {ROLES.map((r, index) => (
-          <button
-            key={r.id}
-            id={`role-${r.id}`}
-            role="tab"
-            aria-selected={role === r.id}
-            aria-controls="role-workspace"
-            tabIndex={role === r.id ? 0 : -1}
-            title={r.description}
-            className={`shrink-0 border-b-2 px-4 py-3 text-sm font-medium ${role === r.id ? "border-orange-700 text-orange-800" : "border-transparent text-slate-600"}`}
-            onClick={() => select(r.id)}
-            onKeyDown={(e) => {
-              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key))
-                return;
-              e.preventDefault();
-              const next =
-                e.key === "Home"
-                  ? 0
-                  : e.key === "End"
-                    ? 2
-                    : (index + (e.key === "ArrowRight" ? 1 : 2)) % 3;
-              select(ROLES[next]!.id);
-              document.getElementById(`role-${ROLES[next]!.id}`)?.focus();
-            }}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-    </nav>
+      {ROLES.map((item) => (
+        <Tab
+          key={item.id}
+          eventKey={item.id}
+          id={`role-${item.id}`}
+          aria-controls="role-workspace"
+          title={<TabTitleText><span title={item.description}>{item.label}</span></TabTitleText>}
+        />
+      ))}
+    </Tabs>
   );
 }

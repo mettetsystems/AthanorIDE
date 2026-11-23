@@ -4,6 +4,16 @@
  * Endpoint preferences and optional write-only vault authentication.
  */
 import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Button,
+  Form,
+  FormGroup,
+  FormSelect,
+  FormSelectOption,
+  Switch,
+  TextInput,
+} from "@patternfly/react-core";
 
 import { ASSISTANT_TOKEN_NAME, assistantTokenStatus } from "@/lib/assistant";
 import { discoverModelEndpoints, type ModelEndpoint } from "@/lib/model-endpoints";
@@ -45,7 +55,11 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
       const found = await discoverModelEndpoints(url, withToken, controller.signal);
       if (controller.signal.aborted) return;
       setEndpoints(found);
-      if (!found.length) setDiscoveryMessage("No compatible model list found. Enter a server URL to check it, or configure the endpoint manually.");
+      if (!found.length) {
+        setDiscoveryMessage(
+          "No compatible model list found. Enter a server URL to check it, or configure the endpoint manually.",
+        );
+      }
     } catch (err: unknown) {
       if (!controller.signal.aborted) {
         setDiscoveryMessage(err instanceof Error ? err.message : "Could not check existing endpoints.");
@@ -116,134 +130,137 @@ export function AssistantSettings({ onOpenVault }: AssistantSettingsProps) {
   };
 
   return (
-    <form
-      className="absolute right-0 z-30 mt-1 max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] space-y-2 overflow-y-auto rounded border border-[var(--athanor-mist)] bg-white p-3 text-sm shadow"
+    <Form
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <div className="space-y-2 rounded bg-slate-50 p-2">
-        <p className="font-medium">Use an existing model endpoint?</p>
-        <p className="text-xs text-[var(--athanor-slate)]">
+      <FormGroup label="Use an existing model endpoint?">
+        <p>
           Reuse Project Maya, vLLM, llama.cpp, or another OpenAI-compatible server to avoid loading another model.
           Checks list models without running inference. Local discovery checks the machine running the API.
         </p>
-        <button type="button" disabled={discovering} className="text-xs underline disabled:opacity-50" onClick={() => void discover()}>
+        <Button variant="link" isInline isDisabled={discovering} onClick={() => void discover()}>
           {discovering ? "Checking existing endpoints…" : "Check local servers again"}
-        </button>
-        <p role="status" className="text-xs text-[var(--athanor-slate)]">{discoveryMessage}</p>
+        </Button>
+        <p role="status">{discoveryMessage}</p>
         {endpoints.map((candidate) => (
-          <div key={candidate.endpoint} className="space-y-1 border-t border-slate-200 pt-2">
-            <p className="break-all text-xs font-medium">{candidate.base_url}</p>
-            <p className="text-xs">{candidate.detail}</p>
+          <div key={candidate.endpoint}>
+            <p>{candidate.base_url}</p>
+            <p>{candidate.detail}</p>
             {candidate.models.length > 0 && (
-              <select
+              <FormSelect
                 aria-label={`Model at ${candidate.base_url}`}
-                className="w-full rounded border border-[var(--athanor-mist)] p-1 text-xs"
-                value={candidate.models.includes(selectedModels[candidate.endpoint] ?? "") ? selectedModels[candidate.endpoint] : candidate.models[0]}
-                onChange={(event) => setSelectedModels((previous) => ({ ...previous, [candidate.endpoint]: event.target.value }))}
+                value={
+                  candidate.models.includes(selectedModels[candidate.endpoint] ?? "")
+                    ? selectedModels[candidate.endpoint]
+                    : candidate.models[0]
+                }
+                onChange={(_event, value) =>
+                  setSelectedModels((previous) => ({ ...previous, [candidate.endpoint]: value }))
+                }
               >
-                {candidate.models.map((id) => <option key={id} value={id}>{id}</option>)}
-              </select>
+                {candidate.models.map((id) => (
+                  <FormSelectOption key={id} value={id} label={id} />
+                ))}
+              </FormSelect>
             )}
             {candidate.status !== "unavailable" && (
-              <button type="button" className="text-xs underline" onClick={() => {
-                const selection = selectedModels[candidate.endpoint];
-                setEndpointDraft(candidate.endpoint);
-                setModelDraft(selection && candidate.models.includes(selection) ? selection : candidate.models[0] ?? "");
-                setUseTokenDraft(candidate.useToken || (candidate.endpoint === endpoint && useToken));
-                setTokenDraft("");
-                setError(null);
-                setMessage(candidate.status === "auth_required"
-                  ? "Save the server token in the local vault, then check this URL again."
-                  : "Existing endpoint selected. Click Save to use it.");
-              }}>
+              <Button
+                variant="link"
+                isInline
+                onClick={() => {
+                  const selection = selectedModels[candidate.endpoint];
+                  setEndpointDraft(candidate.endpoint);
+                  setModelDraft(
+                    selection && candidate.models.includes(selection) ? selection : (candidate.models[0] ?? ""),
+                  );
+                  setUseTokenDraft(candidate.useToken || (candidate.endpoint === endpoint && useToken));
+                  setTokenDraft("");
+                  setError(null);
+                  setMessage(
+                    candidate.status === "auth_required"
+                      ? "Save the server token in the local vault, then check this URL again."
+                      : "Existing endpoint selected. Click Save to use it.",
+                  );
+                }}
+              >
                 {candidate.status === "auth_required" ? "Configure authentication" : "Use this endpoint"}
-              </button>
+              </Button>
             )}
           </div>
         ))}
-      </div>
-      <label className="block space-y-1">
-        <span className="font-medium">Chat completions endpoint</span>
-        <input
+      </FormGroup>
+      <FormGroup label="Chat completions endpoint" fieldId="assistant-endpoint">
+        <TextInput
+          id="assistant-endpoint"
           aria-label="Chat completions endpoint"
-          className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1"
           value={endpointDraft}
-          onChange={(event) => setEndpointDraft(event.target.value)}
+          onChange={(_event, value) => setEndpointDraft(value)}
           placeholder="https://models.example/v1/chat/completions"
           autoComplete="off"
         />
-      </label>
-      <button
-        type="button"
-        disabled={discovering || !endpointDraft.trim()}
-        className="text-xs underline disabled:opacity-50"
+      </FormGroup>
+      <Button
+        variant="link"
+        isInline
+        isDisabled={discovering || !endpointDraft.trim()}
         onClick={() => void discover(endpointDraft.trim(), useTokenDraft)}
       >
         Check this URL{useTokenDraft ? " with saved vault token" : ""}
-      </button>
-      <label className="block space-y-1">
-        <span className="font-medium">Model ID</span>
-        <input
+      </Button>
+      <FormGroup label="Model ID" fieldId="assistant-model">
+        <TextInput
+          id="assistant-model"
           aria-label="Model ID"
-          className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1"
           value={modelDraft}
-          onChange={(event) => setModelDraft(event.target.value)}
+          onChange={(_event, value) => setModelDraft(value)}
           autoComplete="off"
         />
-      </label>
-      <label className="flex cursor-pointer items-center justify-between gap-3">
-        <span className="font-medium">Use API token</span>
-        <input
-          type="checkbox"
-          role="switch"
-          aria-label="Use API token"
-          className="peer sr-only"
-          checked={useTokenDraft}
-          onChange={(event) => {
-            setUseTokenDraft(event.target.checked);
-            setTokenDraft("");
-            setError(null);
-            setMessage(null);
-          }}
-        />
-        <span
-          aria-hidden="true"
-          className="relative h-5 w-9 shrink-0 rounded-full bg-slate-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-[var(--athanor-ink)] peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--athanor-ink)] peer-focus-visible:ring-offset-2"
-        />
-      </label>
-      <p className="text-xs text-[var(--athanor-slate)]">
-        Turn off for local or other endpoints that do not require authentication.
-      </p>
+      </FormGroup>
+      <Switch
+        id="assistant-use-token"
+        label="Use API token"
+        isChecked={useTokenDraft}
+        onChange={(_event, checked) => {
+          setUseTokenDraft(checked);
+          setTokenDraft("");
+          setError(null);
+          setMessage(null);
+        }}
+      />
+      <p>Turn off for local or other endpoints that do not require authentication.</p>
       {useTokenDraft && (
-        <label className="block space-y-1">
-          <span className="font-medium">Token</span>
-          <input
+        <FormGroup label="Token" fieldId="assistant-token">
+          <TextInput
+            id="assistant-token"
             aria-label="Assistant token"
-            className="w-full rounded border border-[var(--athanor-mist)] px-2 py-1"
             type="password"
             value={tokenDraft}
-            onChange={(event) => setTokenDraft(event.target.value)}
+            onChange={(_event, value) => setTokenDraft(value)}
             placeholder="Write-only"
             autoComplete="new-password"
           />
-        </label>
+        </FormGroup>
       )}
-      <p className="text-xs text-[var(--athanor-slate)]">{assistantTokenStatus(stored, useTokenDraft)}</p>
-      {message && <p className="text-xs text-[var(--athanor-slate)]">{message}</p>}
+      <p>{assistantTokenStatus(stored, useTokenDraft)}</p>
+      {message && <p>{message}</p>}
       {error && (
-        <p className="text-xs text-red-700">
-          {error}{" "}
-          <button type="button" className="underline" onClick={onOpenVault}>
-            Open the local vault
-          </button>
-        </p>
+        <Alert
+          variant="danger"
+          isInline
+          title={error}
+          actionLinks={
+            <Button variant="link" isInline onClick={onOpenVault}>
+              Open the local vault
+            </Button>
+          }
+        />
       )}
-      <button type="submit" className="rounded bg-[var(--athanor-ink)] px-2.5 py-1 text-white">
+      <Button type="submit" variant="primary">
         Save
-      </button>
-    </form>
+      </Button>
+    </Form>
   );
 }

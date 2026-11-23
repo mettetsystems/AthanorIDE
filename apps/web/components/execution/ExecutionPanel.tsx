@@ -3,9 +3,18 @@
 /**
  * Bottom panel summarizing the latest Run: steps, payloads, and failures.
  */
+import { useEffect, useState } from "react";
+import {
+  Button,
+  ExpandableSection,
+  Label,
+  Panel,
+  PanelMain,
+  PanelMainBody,
+} from "@patternfly/react-core";
+
 import { useExecutionStore, selectPayloadPreview } from "@/store/execution-store";
 import { useSelectionStore } from "@/store/selection-store";
-import { cn } from "@/lib/cn";
 
 export function ExecutionPanel() {
   const {
@@ -19,95 +28,82 @@ export function ExecutionPanel() {
     selectStep,
   } = useExecutionStore();
   const focusNode = useSelectionStore((state) => state.focusNode);
+  const [expanded, setExpanded] = useState(status !== "idle");
+
+  useEffect(() => {
+    if (status !== "idle") setExpanded(true);
+  }, [status]);
+
+  const summary =
+    status === "idle"
+      ? "Not run yet"
+      : status === "running"
+        ? "Running…"
+        : status === "done"
+          ? `${runStatus ?? "done"}${durationMs != null ? ` · ${durationMs.toFixed(1)} ms` : ""}`
+          : (errorMessage ?? "Execution failed");
 
   return (
-    <details
-      open={status !== "idle"}
-      className="shrink-0 max-h-[30vh] overflow-auto border-t border-[var(--athanor-mist)] bg-white/90 px-4 py-2"
-      aria-live="polite"
-      aria-label="Execution debug"
-    >
-      <summary className="flex cursor-pointer items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Execution</h2>
-        <p className="text-xs text-[var(--athanor-slate)]">
-          {status === "idle" && "Not run yet"}
-          {status === "running" && "Running…"}
-          {status === "done" &&
-            `${runStatus ?? "done"}${durationMs != null ? ` · ${durationMs.toFixed(1)} ms` : ""}`}
-          {status === "error" && (errorMessage ?? "Execution failed")}
-        </p>
-      </summary>
-
-      {status === "idle" && (
-        <p className="text-sm text-[var(--athanor-slate)]">
-          Run preview checks the design without calling models or tools. Export to execute your agent in its sandbox.
-        </p>
-      )}
-
-      {status === "done" && steps.length === 0 && (
-        <p className="text-sm text-[var(--athanor-slate)]">
-          Execution refused because the graph has validation errors. Fix issues, then Run again.
-        </p>
-      )}
-
-      {finalOutputs.length > 0 && (
-        <div className="mb-3 rounded border border-[var(--athanor-mist)] bg-[var(--athanor-paper)] px-3 py-2 text-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--athanor-slate)]">
-            Final output
-          </p>
-          {finalOutputs.map((item) => (
-            <pre
-              key={String(item.nodeId)}
-              className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap text-xs"
-            >
-              {String(item.value ?? "")}
-            </pre>
-          ))}
-        </div>
-      )}
-
-      {steps.length > 0 && (
-        <ul className="max-h-40 space-y-2 overflow-auto">
-          {steps.map((step) => {
-            const preview = selectPayloadPreview(steps, step.nodeId);
-            return (
-              <li key={step.nodeId}>
-                <button
-                  type="button"
-                  className={cn(
-                    "w-full rounded border px-3 py-2 text-left text-sm",
-                    step.status === "error"
-                      ? "border-red-200 bg-red-50"
-                      : step.status === "skipped"
-                        ? "border-amber-200 bg-amber-50"
-                        : selectedStepNodeId === step.nodeId
-                          ? "border-[var(--athanor-ember)] bg-orange-50"
-                          : "border-[var(--athanor-mist)] bg-white",
-                  )}
-                  onClick={() => {
-                    selectStep(step.nodeId);
-                    focusNode(step.nodeId);
-                  }}
-                >
-                  <span className="font-medium uppercase tracking-wide text-xs">
-                    {step.status} · {step.nodeName}
-                  </span>
-                  {step.message && (
-                    <span className="mt-1 block text-xs text-[var(--athanor-slate)]">
-                      {step.message}
-                    </span>
-                  )}
-                  {preview != null && preview !== "" && (
-                    <span className="mt-1 block truncate font-mono text-[11px] text-[var(--athanor-ink)]">
-                      {preview}
-                    </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </details>
+    <Panel aria-live="polite" aria-label="Execution debug">
+      <PanelMain>
+        <ExpandableSection
+          isExpanded={expanded}
+          onToggle={(_event, isExpanded) => setExpanded(isExpanded)}
+          toggleText={`Execution · ${summary}`}
+        >
+          <PanelMainBody>
+            {status === "idle" && (
+              <p>
+                Run preview checks the design without calling models or tools. Export to execute your agent in its sandbox.
+              </p>
+            )}
+            {status === "done" && steps.length === 0 && (
+              <p>Execution refused because the graph has validation errors. Fix issues, then Run again.</p>
+            )}
+            {finalOutputs.length > 0 && (
+              <div>
+                <p>Final output</p>
+                {finalOutputs.map((item) => (
+                  <pre key={String(item.nodeId)}>{String(item.value ?? "")}</pre>
+                ))}
+              </div>
+            )}
+            {steps.length > 0 && (
+              <ul className="editor-scroll">
+                {steps.map((step) => {
+                  const preview = selectPayloadPreview(steps, step.nodeId);
+                  return (
+                    <li key={step.nodeId}>
+                      <Button
+                        variant={selectedStepNodeId === step.nodeId ? "primary" : "secondary"}
+                        isBlock
+                        onClick={() => {
+                          selectStep(step.nodeId);
+                          focusNode(step.nodeId);
+                        }}
+                      >
+                        <Label
+                          color={
+                            step.status === "error"
+                              ? "red"
+                              : step.status === "skipped"
+                                ? "orange"
+                                : "green"
+                          }
+                        >
+                          {step.status} · {step.nodeName}
+                        </Label>
+                        {step.message && <span>{step.message}</span>}
+                        {preview != null && preview !== "" && <span>{preview}</span>}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </PanelMainBody>
+        </ExpandableSection>
+      </PanelMain>
+    </Panel>
   );
 }

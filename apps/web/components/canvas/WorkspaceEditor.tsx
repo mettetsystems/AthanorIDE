@@ -4,20 +4,27 @@
  * Editor shell that hydrates a projectId and lays out palette, canvas, and inspector.
  */
 import Link from "next/link";
-import { RoleTabs } from "@/components/workflow/RoleTabs";
-import {
-  WorkflowCanvas,
-  parseTransitionFlowId,
-} from "@/components/workflow/WorkflowCanvas";
-import {
-  WorkflowInspector,
-  ComponentWorkflowControls,
-} from "@/components/workflow/WorkflowInspector";
-import { parseTaskFlowId } from "@/lib/workflow";
-import { useUiPreferencesStore } from "@/store/ui-preferences-store";
-import { useSelectionStore } from "@/store/selection-store";
-import { validateCurrentProject } from "@/lib/validate";
 import { useEffect, useState } from "react";
+import {
+  Button,
+  Drawer,
+  DrawerActions,
+  DrawerCloseButton,
+  DrawerContent,
+  DrawerContentBody,
+  DrawerHead,
+  DrawerPanelContent,
+  EmptyState,
+  EmptyStateActions,
+  EmptyStateBody,
+  EmptyStateFooter,
+  Page,
+  PageSection,
+  Tab,
+  TabTitleText,
+  Tabs,
+  Title,
+} from "@patternfly/react-core";
 
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { ArchitectureCanvas } from "@/components/canvas/ArchitectureCanvas";
@@ -29,14 +36,39 @@ import { LocalVaultPanel } from "@/components/inspector/LocalVaultPanel";
 import { NodeInspector } from "@/components/inspector/NodeInspector";
 import { NodePalette } from "@/components/sidebar/NodePalette";
 import { ValidationPanel } from "@/components/validation/ValidationPanel";
+import { RoleTabs } from "@/components/workflow/RoleTabs";
+import {
+  parseTransitionFlowId,
+  WorkflowCanvas,
+} from "@/components/workflow/WorkflowCanvas";
+import {
+  ComponentWorkflowControls,
+  WorkflowInspector,
+} from "@/components/workflow/WorkflowInspector";
 import { refreshProjectIndex } from "@/lib/graphrag";
+import { validateCurrentProject } from "@/lib/validate";
+import { parseTaskFlowId } from "@/lib/workflow";
 import { useProjectStore } from "@/store/project-store";
+import { useSelectionStore } from "@/store/selection-store";
+import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 
 type WorkspaceEditorProps = {
   projectId?: string;
 };
 
 type RightPanel = "inspector" | "infra" | "vault";
+
+function useWideLayout() {
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 64rem)");
+    const apply = () => setWide(query.matches);
+    apply();
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, []);
+  return wide;
+}
 
 export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   const role = useUiPreferencesStore((s) => s.workspaceRole);
@@ -46,14 +78,12 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
     parseTaskFlowId(selection.selectedNodeIds[0] ?? "") ||
       parseTransitionFlowId(selection.selectedEdgeIds[0] ?? ""),
   );
+  const wide = useWideLayout();
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("role");
-    if (
-      requested === "sme" ||
-      requested === "engineer" ||
-      requested === "security"
-    )
+    if (requested === "sme" || requested === "engineer" || requested === "security") {
       useUiPreferencesStore.getState().setWorkspaceRole(requested);
+    }
   }, []);
   useEffect(() => {
     if (role !== "security") return;
@@ -65,9 +95,7 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
   const [missing, setMissing] = useState(false);
   const [rightPanel, setRightPanel] = useState<RightPanel>("inspector");
   const [rightView, setRightView] = useState<"details" | "assistant">("details");
-  const [mobilePanel, setMobilePanel] = useState<
-    "palette" | "inspector" | null
-  >(null);
+  const [mobilePanel, setMobilePanel] = useState<"palette" | "inspector" | null>(null);
 
   useEffect(() => {
     setRightPanel("inspector");
@@ -112,129 +140,144 @@ export function WorkspaceEditor({ projectId }: WorkspaceEditorProps) {
 
   if (missing) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
-        <p className="text-sm text-[var(--athanor-slate)]">
-          That project was not found in local storage.
-        </p>
-        <Link
-          href="/"
-          className="rounded bg-[var(--athanor-ink)] px-3 py-1.5 text-sm font-medium text-white"
-        >
-          Back to projects
-        </Link>
-      </div>
+      <Page>
+        <PageSection>
+          <EmptyState>
+            <Title headingLevel="h1">Project not found</Title>
+            <EmptyStateBody>That project was not found in local storage.</EmptyStateBody>
+            <EmptyStateFooter>
+              <EmptyStateActions>
+                <Link href="/">
+                  <Button variant="primary">Back to projects</Button>
+                </Link>
+              </EmptyStateActions>
+            </EmptyStateFooter>
+          </EmptyState>
+        </PageSection>
+      </Page>
     );
   }
 
   if (!hydrated || (projectId && graph.project.id !== projectId)) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-sm text-[var(--athanor-slate)]">
-        Loading workspace…
-      </div>
+      <Page>
+        <PageSection>Loading workspace…</PageSection>
+      </Page>
     );
   }
 
-  return (
-    <div className="fixed inset-0 flex overflow-hidden flex-col bg-[var(--athanor-paper)]">
-      <div className="shrink-0">
-        <EditorToolbar
-          onOpenInfrastructureTokens={() => setRightPanel("infra")}
-          onOpenLocalVault={() => setRightPanel("vault")}
-          onToggleNodeLibrary={() =>
-            setMobilePanel((current) =>
-              current === "palette" ? null : "palette",
-            )
-          }
-          onToggleInspector={() =>
-            setMobilePanel((current) =>
-              current === "inspector" ? null : "inspector",
-            )
-          }
-        />
-      </div>
-      <RoleTabs />
-      <div
-        id="role-workspace"
-        role="tabpanel"
-        aria-labelledby={`role-${role}`}
-        className="relative flex min-h-0 flex-1"
-      >
-        {role !== "sme" && (
-          <div
-            className={
-              mobilePanel === "palette"
-                ? "absolute inset-y-0 left-0 z-30 shadow-xl lg:static lg:z-auto lg:shadow-none"
-                : "hidden lg:block"
-            }
+  const paletteOpen = role !== "sme" && (wide || mobilePanel === "palette");
+  const inspectorOpen = wide || mobilePanel === "inspector";
+
+  const inspector = (
+    <div className="editor-inspector editor-scroll">
+      {rightPanel === "infra" ? (
+        <InfrastructureTokensPanel open onClose={() => setRightPanel("inspector")} />
+      ) : rightPanel === "vault" ? (
+        <LocalVaultPanel open onClose={() => setRightPanel("inspector")} />
+      ) : (
+        <>
+          <Tabs
+            activeKey={rightView}
+            onSelect={(_event, key) => setRightView(key as "details" | "assistant")}
+            aria-label="Right column"
           >
-            <NodePalette />
-          </div>
-        )}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1">
-            {role === "sme" ? <WorkflowCanvas /> : <ArchitectureCanvas />}
-          </div>
-          {role !== "sme" && <ExecutionPanel />}
-          <ValidationPanel />
-        </div>
-        <div
-          className={
-            mobilePanel === "inspector"
-              ? "absolute inset-y-0 right-0 z-30 flex w-80 max-w-[calc(100vw-1rem)] flex-col overflow-y-auto overscroll-contain bg-white shadow-xl lg:static lg:z-auto lg:max-w-none lg:shadow-none"
-              : "hidden lg:flex lg:min-h-0 lg:w-80 lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:overscroll-contain lg:border-l lg:border-[var(--athanor-mist)]"
-          }
-        >
-          {rightPanel === "infra" ? (
-            <InfrastructureTokensPanel
-              open
-              onClose={() => setRightPanel("inspector")}
-            />
-          ) : rightPanel === "vault" ? (
-            <LocalVaultPanel open onClose={() => setRightPanel("inspector")} />
+            <Tab eventKey="details" title={<TabTitleText>Details</TabTitleText>} />
+            <Tab eventKey="assistant" title={<TabTitleText>Assistant</TabTitleText>} />
+          </Tabs>
+          {rightView === "assistant" ? (
+            <AssistantPanel />
           ) : (
             <>
-              <div className="flex gap-1 border-b border-[var(--athanor-mist)] p-2" role="tablist" aria-label="Right column">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={rightView === "details"}
-                  className={`rounded px-2 py-1 text-xs ${rightView === "details" ? "bg-[var(--athanor-ink)] text-white" : "border border-[var(--athanor-mist)]"}`}
-                  onClick={() => setRightView("details")}
-                >
-                  Details
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={rightView === "assistant"}
-                  className={`rounded px-2 py-1 text-xs ${rightView === "assistant" ? "bg-[var(--athanor-ink)] text-white" : "border border-[var(--athanor-mist)]"}`}
-                  onClick={() => setRightView("assistant")}
-                >
-                  Assistant
-                </button>
+              <DeleteConfirmationPanel />
+              <div className="editor-scroll">
+                {role === "sme" || workflowSelection ? (
+                  <WorkflowInspector />
+                ) : (
+                  <>
+                    <ComponentWorkflowControls />
+                    <NodeInspector />
+                    <WorkflowInspector />
+                  </>
+                )}
               </div>
-              {rightView === "assistant" ? (
-                <AssistantPanel />
-              ) : (
-                <>
-                  <DeleteConfirmationPanel />
-                  <div className="min-h-0 flex-1">
-                    {role === "sme" || workflowSelection ? (
-                      <WorkflowInspector />
-                    ) : (
-                      <>
-                        <ComponentWorkflowControls />
-                        <NodeInspector />
-                        <WorkflowInspector />
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
             </>
           )}
-        </div>
-      </div>
+        </>
+      )}
     </div>
+  );
+
+  return (
+    <Page className="editor-shell">
+      <PageSection padding={{ default: "noPadding" }} className="editor-workspace">
+        <EditorToolbar
+          onOpenInfrastructureTokens={() => {
+            setRightPanel("infra");
+            setMobilePanel("inspector");
+          }}
+          onOpenLocalVault={() => {
+            setRightPanel("vault");
+            setMobilePanel("inspector");
+          }}
+          onToggleNodeLibrary={() =>
+            setMobilePanel((current) => (current === "palette" ? null : "palette"))
+          }
+          onToggleInspector={() =>
+            setMobilePanel((current) => (current === "inspector" ? null : "inspector"))
+          }
+        />
+        <RoleTabs />
+        <div id="role-workspace" role="tabpanel" aria-labelledby={`role-${role}`} className="editor-workspace">
+          <Drawer isExpanded={paletteOpen} isInline={wide} isStatic={wide} position="start">
+            <DrawerContent
+              panelContent={
+                role === "sme" ? undefined : (
+                  <DrawerPanelContent defaultSize="20rem" minSize="14rem" isResizable>
+                    {!wide && (
+                      <DrawerHead>
+                        <DrawerActions>
+                          <DrawerCloseButton onClick={() => setMobilePanel(null)} />
+                        </DrawerActions>
+                      </DrawerHead>
+                    )}
+                    <NodePalette />
+                  </DrawerPanelContent>
+                )
+              }
+            >
+              <DrawerContentBody>
+                <Drawer isExpanded={inspectorOpen} isInline={wide} isStatic={wide} position="end">
+                  <DrawerContent
+                    panelContent={
+                      <DrawerPanelContent defaultSize="20rem" minSize="16rem">
+                        {!wide && (
+                          <DrawerHead>
+                            <DrawerActions>
+                              <DrawerCloseButton onClick={() => setMobilePanel(null)} />
+                            </DrawerActions>
+                          </DrawerHead>
+                        )}
+                        {inspector}
+                      </DrawerPanelContent>
+                    }
+                  >
+                    <DrawerContentBody>
+                      <div className="editor-canvas-column">
+                        <div className="editor-canvas">
+                          {role === "sme" ? <WorkflowCanvas /> : <ArchitectureCanvas />}
+                        </div>
+                        {role !== "sme" && <ExecutionPanel />}
+                        <ValidationPanel />
+                      </div>
+                    </DrawerContentBody>
+                  </DrawerContent>
+                </Drawer>
+              </DrawerContentBody>
+            </DrawerContent>
+          </Drawer>
+        </div>
+      </PageSection>
+    </Page>
   );
 }

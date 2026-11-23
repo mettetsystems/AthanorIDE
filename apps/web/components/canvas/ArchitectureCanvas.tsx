@@ -1,57 +1,40 @@
 "use client";
 
 /**
- * React Flow canvas: nodes/edges rendering, connect validation, keyboard shortcuts.
+ * PatternFly topology canvas: author-placed nodes, port connections, and overlays.
  */
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent as ReactMouseEvent,
-} from "react";
+  Alert,
+  AlertActionCloseButton,
+} from "@patternfly/react-core";
 import {
-  Background,
-  Controls,
-  MiniMap,
-  PanOnScrollMode,
-  ReactFlow,
-  ReactFlowProvider,
-  type FinalConnectionState,
-  useReactFlow,
-  useNodesState,
-  useEdgesState,
-  useNodesInitialized,
-  type Connection,
-  type Edge,
+  DRAG_NODE_END_EVENT,
+  DRAG_NODE_EVENT,
+  DRAG_NODE_START_EVENT,
+  GRAPH_POSITION_CHANGE_EVENT,
+  Point,
+  TopologyControlBar,
+  TopologyView,
+  Visualization,
+  VisualizationProvider,
+  VisualizationSurface,
+  createTopologyControlButtons,
+  defaultControlButtonsOptions,
   type Node,
-  type OnNodeDrag,
-  type OnSelectionChangeParams,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+} from "@patternfly/react-topology";
+import type { ContractType } from "@athanor/contracts";
 
-import { parseTaskFlowId, taskFlowId, securityCategories } from "@/lib/workflow";
-import { architectureNodeTypes } from "@/components/nodes/nodeTypes";
-import type { ArchitectureFlowNodeData } from "@/components/nodes/FoundationNode";
-import type { MacroFlowNodeData } from "@/components/nodes/MacroBlockNode";
-import type { SwimlaneFlowNodeData } from "@/components/nodes/SwimlaneNode";
+import { componentFactory } from "@/components/topology/componentFactory";
+import { portFromPoint, portFromTarget } from "@/components/topology/connect";
+import { architectureModel } from "@/components/topology/model";
+import { bindAthanorNavigation, centerGraph, clientToGraph } from "@/components/topology/navigation";
+import { snap } from "@/components/topology/layers";
 import { lodFromZoom, lodLabel, type LodLevel } from "@/lib/lod";
-import {
-  macroFlowId,
-  macroPosition,
-  parseMacroFlowId,
-  macroPortBindings,
-} from "@/lib/macros";
-import { groupPortalsByBus } from "@/lib/portals";
-import {
-  isCrossEnvironmentEdge,
-  parseSwimlaneFlowId,
-  swimlaneBounds,
-  swimlaneFlowId,
-} from "@/lib/swimlanes";
+import { macroFlowId, parseMacroFlowId } from "@/lib/macros";
+import { parseSwimlaneFlowId } from "@/lib/swimlanes";
 import { evaluateConnection } from "@/lib/graph-utils";
-import { CONTRACT_TYPE_LABELS } from "@athanor/contracts";
+import { parseTaskFlowId } from "@/lib/workflow";
 import { useConnectionDraftStore } from "@/store/connection-draft-store";
 import { usePendingDeleteStore } from "@/store/pending-delete-store";
 import { useProjectStore } from "@/store/project-store";
@@ -60,589 +43,256 @@ import { useValidationStore } from "@/store/validation-store";
 import { useExecutionStore } from "@/store/execution-store";
 import { useUiPreferencesStore } from "@/store/ui-preferences-store";
 
-function rejectedConnectionReason(
-  state: FinalConnectionState,
-  excludedEdgeId?: string,
-): string | null {
-  if (state.toPosition === null) return null;
-  if (!state.toHandle || !state.toNode || !state.fromHandle || !state.fromNode) {
-    return "That connection was not accepted. Connect an output to a compatible input; the port labels show the supported data types.";
-  }
-  const fromIsSource = state.fromHandle.type === "source";
-  const decision = evaluateConnection({
-    nodes: useProjectStore.getState().graph.nodes,
-    edges: useProjectStore.getState().graph.edges.filter(edge => edge.id !== excludedEdgeId),
-    sourceNodeId: fromIsSource ? state.fromNode.id : state.toNode.id,
-    sourcePortId: fromIsSource ? state.fromHandle.id ?? "" : state.toHandle.id ?? "",
-    targetNodeId: fromIsSource ? state.toNode.id : state.fromNode.id,
-    targetPortId: fromIsSource ? state.toHandle.id ?? "" : state.fromHandle.id ?? "",
-  });
-  return decision.ok ? null : decision.reason;
-}
+const REJECTED = "That connection was not accepted. Connect an output to a compatible input; the port labels show the supported data types.";
 
-function CanvasInner() {
+type DragEventLike = { dx: number; dy: number };
+
+export function ArchitectureCanvas() {
   const graph = useProjectStore((state) => state.graph);
-  const securityView = useUiPreferencesStore(s => s.workspaceRole === "security");
-  const moveTaskGroup = useProjectStore(s => s.moveTaskGroup);
-  const connectPorts = useProjectStore((state) => state.connectPorts);
-  const updateNodePositions = useProjectStore((state) => state.updateNodePositions);
-  const reconnectPorts = useProjectStore((state) => state.reconnectPorts);
-  const reconnectingEdge = useRef<string | null>(null);
-  const beginGesture = useProjectStore((state) => state.beginGesture);
-  const setViewport = useProjectStore((state) => state.setViewport);
-  const duplicateNodes = useProjectStore((state) => state.duplicateNodes);
-  const undo = useProjectStore((state) => state.undo);
-  const redo = useProjectStore((state) => state.redo);
-  const connectionError = useProjectStore((state) => state.connectionError);
-  const setConnectionError = useProjectStore((state) => state.setConnectionError);
-  const clearConnectionError = useProjectStore((state) => state.clearConnectionError);
-  const expandMacro = useProjectStore((state) => state.expandMacro);
-  const updateMacroPosition = useProjectStore((state) => state.updateMacroPosition);
-  const updateSwimlaneBounds = useProjectStore((state) => state.updateSwimlaneBounds);
-  const assignNodesToSwimlanes = useProjectStore((state) => state.assignNodesToSwimlanes);
-
-  const selectedNodeIds = useSelectionStore((state) => state.selectedNodeIds);
+  const issues = useValidationStore((state) => state.issues);
+  const steps = useExecutionStore((state) => state.steps);
+  const edgePayloads = useExecutionStore((state) => state.edgePayloads);
+  const securityView = useUiPreferencesStore((state) => state.workspaceRole === "security");
   const selectedEdgeIds = useSelectionStore((state) => state.selectedEdgeIds);
-  const setSelection = useSelectionStore((state) => state.setSelection);
   const focusNodeId = useSelectionStore((state) => state.focusNodeId);
   const focusEdgeId = useSelectionStore((state) => state.focusEdgeId);
-
-  const issues = useValidationStore((state) => state.issues);
-  const executionSteps = useExecutionStore((state) => state.steps);
-  const edgePayloads = useExecutionStore((state) => state.edgePayloads);
-
-  const { setCenter, fitView, getZoom } = useReactFlow();
-  const nodesInitialized = useNodesInitialized();
-  const initialFit = useRef(false);
+  const connectionError = useProjectStore((state) => state.connectionError);
   const [lod, setLod] = useState<LodLevel>(() => lodFromZoom(graph.viewport.zoom));
-  const lowResourceMode = useUiPreferencesStore((state) => state.lowResourceMode);
-
-  const healthByNode = useMemo(() => {
-    const map = new Map<string, ArchitectureFlowNodeData["health"]>();
-    for (const issue of issues) {
-      if (!issue.nodeId) continue;
-      const current = map.get(issue.nodeId);
-      if (issue.severity === "error") {
-        map.set(issue.nodeId, "error");
-      } else if (issue.severity === "warning" && current !== "error") {
-        map.set(issue.nodeId, "warning");
-      } else if (!current) {
-        map.set(issue.nodeId, "ok");
-      }
-    }
-    if (issues.length > 0) {
-      for (const node of graph.nodes) {
-        if (!map.has(node.id)) map.set(node.id, "ok");
-      }
-    }
-    return map;
-  }, [graph.nodes, issues]);
-
-  const laneNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const lane of graph.deploymentEnvironments) {
-      map.set(lane.id, lane.name);
-    }
-    return map;
-  }, [graph.deploymentEnvironments]);
-
-  const nodeIndexes = useMemo(() => {
-    const byId = new Map(graph.nodes.map((node) => [node.id, node]));
-    const countByDeployment = new Map<string, number>();
-    for (const node of graph.nodes) {
-      if (node.deploymentTarget) {
-        countByDeployment.set(node.deploymentTarget, (countByDeployment.get(node.deploymentTarget) ?? 0) + 1);
-      }
-    }
-    const executionByNode = new Map(executionSteps.map((step) => [step.nodeId, step]));
-    const payloadByNode = new Map<string, string>();
-    for (const step of executionSteps) {
-      const payload = step.nodeType === "foundation.output_viewer"
-        ? Object.values(step.inputs)[0] ?? null
-        : Object.values(step.outputs)[0] ?? step.message ?? null;
-      if (payload !== null) payloadByNode.set(step.nodeId, payload);
-    }
-    return { byId, countByDeployment, executionByNode, payloadByNode };
-  }, [executionSteps, graph.nodes]);
-
-  const collapsedMacroIndexes = useMemo(() => {
-    const hiddenByMacro = new Map<string, string>();
-    const byId = new Map(graph.macroBlocks.map((macro) => [macro.id, macro]));
-    const handleByNodePort = new Map<string, { macroId: string; handleId: string }>();
-    for (const macro of graph.macroBlocks) {
-      if (!macro.collapsed) continue;
-      for (const id of macro.nodeIds) hiddenByMacro.set(id, macro.id);
-      for (const [handleId, binding] of Object.entries(macroPortBindings(macro))) {
-        const direction = handleId.startsWith("macro-in-") ? "target" : "source";
-        handleByNodePort.set(`${binding.nodeId}\0${binding.portId}\0${direction}`, { macroId: macro.id, handleId });
-      }
-    }
-    return { hiddenByMacro, byId, handleByNodePort };
-  }, [graph.macroBlocks]);
-
-  const payloadByEdge = useMemo(
-    () => new Map(edgePayloads.map((payload) => [payload.edgeId, payload])),
-    [edgePayloads],
+  const [zoom, setZoom] = useState(graph.viewport.zoom);
+  const [draftLine, setDraftLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
+  const [box, setBox] = useState<{ x: number; y: number; x2: number; y2: number } | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const model = useMemo(
+    () => architectureModel({
+      graph,
+      lod,
+      selectedEdgeIds,
+      focusEdgeId,
+      issues,
+      securityView,
+      steps,
+      edgePayloads,
+    }),
+    [edgePayloads, focusEdgeId, graph, issues, lod, securityView, selectedEdgeIds, steps],
   );
-
-  const nodes: Node[] = useMemo(() => {
-    const swimlaneNodes: Node[] = graph.deploymentEnvironments.map((lane) => {
-      const bounds = swimlaneBounds(lane);
-      const nodeCount = nodeIndexes.countByDeployment.get(lane.id) ?? 0;
-      return {
-        id: swimlaneFlowId(lane.id),
-        type: "swimlane",
-        position: { x: bounds.x, y: bounds.y },
-        style: { width: bounds.width, height: bounds.height, zIndex: -1 },
-        draggable: true,
-        selectable: true,
-        data: {
-          name: lane.name,
-          kind: lane.kind,
-          lod,
-          nodeCount,
-        } satisfies SwimlaneFlowNodeData,
-      };
-    });
-
-    const architectureNodes: Node[] = graph.nodes
-      .filter((node) => !collapsedMacroIndexes.hiddenByMacro.has(node.id))
-      .map((node) => {
-        const step = nodeIndexes.executionByNode.get(node.id);
-        return {
-          id: node.id,
-          type: "architecture",
-          position: node.position,
-          selected: selectedNodeIds.includes(node.id),
-          zIndex: 1,
-          data: {
-            architectureNode: node,
-            securityTags: securityView ? [...securityCategories(node), ...(issues.some(i => i.nodeId === node.id && i.code === "SECURITY_EMBEDDED_CREDENTIAL") ? ["Possible embedded credential"] : []), ...(issues.some(i => i.nodeId === node.id && i.code === "SECURITY_DISCONNECTED_COMPONENT") ? ["Disconnected component"] : [])] : [],
-            lod,
-            health: healthByNode.get(node.id) ?? "unknown",
-            deploymentLabel: node.deploymentTarget
-              ? laneNameById.get(node.deploymentTarget)
-              : undefined,
-            payloadPreview: nodeIndexes.payloadByNode.get(node.id),
-            executionStatus: step?.status ?? null,
-          } satisfies ArchitectureFlowNodeData,
-        };
-      });
-
-    const macroNodes: Node[] = graph.macroBlocks
-      .filter((macro) => macro.collapsed)
-      .map((macro) => ({
-        id: macroFlowId(macro.id),
-        type: "macro",
-        position: macroPosition(macro),
-        selected: selectedNodeIds.includes(macroFlowId(macro.id)),
-        zIndex: 2,
-        data: {
-          macroId: macro.id,
-          name: macro.name,
-          description: macro.description,
-          nodeCount: macro.nodeIds.length,
-          inputs: macro.inputs,
-          outputs: macro.outputs,
-          lod,
-          onExpand: expandMacro,
-        } satisfies MacroFlowNodeData,
-      }));
-
-    const groups: Node[] = graph.workflow.tasks.map(task => ({ id: taskFlowId(task.id), type: "workflowTask", position: { x: task.engineeringBounds.x, y: task.engineeringBounds.y }, style: { width: task.engineeringBounds.width, height: task.engineeringBounds.height }, zIndex: -1, selected: selectedNodeIds.includes(taskFlowId(task.id)), data: { task, engineering: true, count: graph.nodes.filter(n => n.workflowTaskId === task.id).length }, dragHandle: ".task-drag-handle" }));
-    return [...swimlaneNodes, ...groups, ...architectureNodes, ...macroNodes];
-  }, [
-    expandMacro,
-    graph.deploymentEnvironments,
-    graph.macroBlocks,
-    graph.nodes,
-    graph.workflow.tasks,
-    securityView,
-    issues,
-    healthByNode,
-    laneNameById,
-    lod,
-    selectedNodeIds,
-    nodeIndexes,
-    collapsedMacroIndexes,
-  ]);
-
-  const edges: Edge[] = useMemo(() => {
-    const result: Edge[] = [];
-
-    for (const edge of graph.edges) {
-      const sourceMacro = collapsedMacroIndexes.hiddenByMacro.get(edge.sourceNodeId);
-      const targetMacro = collapsedMacroIndexes.hiddenByMacro.get(edge.targetNodeId);
-      const sourceHidden = Boolean(sourceMacro);
-      const targetHidden = Boolean(targetMacro);
-      if (sourceMacro && sourceMacro === targetMacro) continue;
-
-      let source = edge.sourceNodeId;
-      let target = edge.targetNodeId;
-      let sourceHandle = edge.sourcePortId;
-      let targetHandle = edge.targetPortId;
-
-      if (sourceHidden) {
-        const resolved = collapsedMacroIndexes.handleByNodePort.get(`${edge.sourceNodeId}\0${edge.sourcePortId}\0source`);
-        if (!resolved) continue;
-        source = macroFlowId(resolved.macroId);
-        sourceHandle = resolved.handleId;
-      }
-      if (targetHidden) {
-        const resolved = collapsedMacroIndexes.handleByNodePort.get(`${edge.targetNodeId}\0${edge.targetPortId}\0target`);
-        if (!resolved) continue;
-        target = macroFlowId(resolved.macroId);
-        targetHandle = resolved.handleId;
-      }
-
-      const cross = isCrossEnvironmentEdge(edge, nodeIndexes.byId);
-      const payload = payloadByEdge.get(edge.id);
-      const isSelected =
-        selectedEdgeIds.includes(edge.id) || focusEdgeId === edge.id;
-      const sourceNode = nodeIndexes.byId.get(edge.sourceNodeId);
-      const sourcePort = sourceNode?.outputs.find(
-        (port) => port.id === edge.sourcePortId,
-      );
-      const contractLabel = sourcePort
-        ? CONTRACT_TYPE_LABELS[sourcePort.contractType]
-        : "Unresolved contract";
-      const payloadLabel =
-        payload && lod !== "macro"
-          ? payload.value.length > 24
-            ? `${payload.value.slice(0, 24)}…`
-            : payload.value
-          : undefined;
-      result.push({
-        id: edge.id,
-        source,
-        target,
-        sourceHandle,
-        targetHandle,
-        selectable: true,
-        focusable: true,
-        interactionWidth: 28,
-        selected: isSelected,
-        label: lod === "macro"
-          ? undefined
-          : [contractLabel, cross ? "cross-env" : undefined, payloadLabel]
-            .filter(Boolean)
-            .join(" · "),
-        animated: cross || Boolean(payload) || isSelected,
-        style: {
-          stroke: isSelected
-            ? "var(--athanor-ember)"
-            : cross
-              ? "#c2410c"
-              : payload
-                ? "#9a3412"
-                : "#78716c",
-          strokeWidth: isSelected ? 3 : cross || payload ? 2 : 1.75,
-          strokeDasharray: cross ? "6 4" : undefined,
-        },
-        className: focusEdgeId === edge.id ? "athanor-focus-edge" : undefined,
-      });
-    }
-
-    if (lod !== "micro") {
-      const portalGroups = groupPortalsByBus(graph.nodes);
-      for (const [busId, portals] of portalGroups) {
-        const inputs = portals.filter((node) => node.type === "foundation.portal_input");
-        const outputs = portals.filter((node) => node.type === "foundation.portal_output");
-        for (const output of outputs) {
-          if (collapsedMacroIndexes.hiddenByMacro.has(output.id)) continue;
-          for (const input of inputs) {
-            if (collapsedMacroIndexes.hiddenByMacro.has(input.id)) continue;
-            result.push({
-              id: `portal-bus-${busId}-${output.id}-${input.id}`,
-              source: output.id,
-              target: input.id,
-              sourceHandle: "bus-out",
-              targetHandle: "bus-in",
-              selectable: false,
-              focusable: false,
-              animated: true,
-              label: lod === "macro" ? busId : `bus:${busId}`,
-              style: {
-                stroke: "#a16207",
-                strokeDasharray: "2 6",
-                strokeWidth: 1.5,
-              },
-            });
-          }
-        }
-      }
-    }
-
-    return result;
-  }, [focusEdgeId, graph.edges, graph.nodes, lod, selectedEdgeIds, collapsedMacroIndexes, nodeIndexes, payloadByEdge]);
-
-  // Transient drag/selection state stays in React Flow. Commit graph positions once at drop.
-  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState(nodes);
-  const [flowEdges, setFlowEdges, onEdgesChange] = useEdgesState(edges);
-  useEffect(() => { setFlowNodes(nodes); }, [nodes, setFlowNodes]);
-  useEffect(() => { setFlowEdges(edges); }, [edges, setFlowEdges]);
+  const controllerRef = useRef<Visualization | null>(null);
+  if (!controllerRef.current) {
+    const created = new Visualization();
+    created.registerComponentFactory(componentFactory);
+    created.fromModel(model, false);
+    created.getGraph().setDetailsLevelThresholds({ low: 0.349, medium: 0.999 });
+    controllerRef.current = created;
+  }
+  const controller = controllerRef.current;
 
   useEffect(() => {
-    setLod(lodFromZoom(graph.viewport.zoom));
-  }, [graph.viewport.zoom]);
+    if (dragging.current) return;
+    controller.fromModel(model, true);
+  }, [controller, model]);
+
+  useEffect(() => {
+    const viewport = useProjectStore.getState().graph.viewport;
+    const surface = controller.getGraph();
+    surface.setDetailsLevelThresholds({ low: 0.349, medium: 0.999 });
+    if (viewport.x === 0 && viewport.y === 0 && viewport.zoom === 1) {
+      const frame = window.requestAnimationFrame(() => {
+        surface.setScale(1);
+        surface.fit(64);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    surface.setScale(viewport.zoom);
+    surface.setPosition(new Point(viewport.x, viewport.y));
+    return undefined;
+  }, [controller]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    const svg = host?.querySelector("svg");
+    if (!svg) return;
+    return bindAthanorNavigation(svg, controller.getGraph());
+  }, [controller]);
+
+  useEffect(() => {
+    let timer = 0;
+    const onMove = () => {
+      const surface = controller.getGraph();
+      const nextLod = lodFromZoom(surface.getScale());
+      setLod((current) => (current === nextLod ? current : nextLod));
+      setZoom(surface.getScale());
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const position = surface.getPosition();
+        const next = { x: position.x, y: position.y, zoom: surface.getScale() };
+        const current = useProjectStore.getState().graph.viewport;
+        if (current.x !== next.x || current.y !== next.y || current.zoom !== next.zoom) {
+          useProjectStore.getState().setViewport(next);
+        }
+      }, 200);
+    };
+    controller.addEventListener(GRAPH_POSITION_CHANGE_EVENT, onMove);
+    return () => {
+      controller.removeEventListener(GRAPH_POSITION_CHANGE_EVENT, onMove);
+      window.clearTimeout(timer);
+    };
+  }, [controller]);
+
+  useEffect(() => {
+    const starts = new Map<string, { x: number; y: number }>();
+    const onStart = (node: Node) => {
+      dragging.current = true;
+      useProjectStore.getState().beginGesture();
+      starts.clear();
+      const selected = useSelectionStore.getState().selectedNodeIds;
+      const ids = selected.includes(node.getId()) ? selected : [node.getId()];
+      for (const id of ids) {
+        const item = controller.getNodeById(id);
+        if (!item) continue;
+        const position = item.getPosition();
+        starts.set(id, { x: position.x, y: position.y });
+      }
+    };
+    const onDrag = (node: Node, event: DragEventLike) => {
+      const taskId = parseTaskFlowId(node.getId());
+      if (taskId) {
+        for (const item of controller.getGraph().getNodes()) {
+          const data = item.getData() as { workflowTaskId?: string } | undefined;
+          if (data?.workflowTaskId !== taskId) continue;
+          const position = item.getPosition();
+          item.setPosition(new Point(position.x + event.dx, position.y + event.dy));
+        }
+      }
+      if (starts.size < 2) return;
+      for (const id of starts.keys()) {
+        if (id === node.getId()) continue;
+        const item = controller.getNodeById(id);
+        if (!item) continue;
+        const position = item.getPosition();
+        item.setPosition(new Point(position.x + event.dx, position.y + event.dy));
+      }
+    };
+    const onEnd = () => {
+      dragging.current = false;
+      const state = useProjectStore.getState();
+      const movedGroups = new Set<string>();
+      for (const id of starts.keys()) {
+        const taskId = parseTaskFlowId(id);
+        const item = controller.getNodeById(id);
+        if (!taskId || !item) continue;
+        movedGroups.add(taskId);
+        const position = item.getPosition();
+        state.moveTaskGroup(taskId, snap(position.x), snap(position.y));
+      }
+      for (const id of starts.keys()) {
+        const item = controller.getNodeById(id);
+        if (!item) continue;
+        const position = item.getPosition();
+        const laneId = parseSwimlaneFlowId(id);
+        if (laneId) {
+          const size = item.getDimensions();
+          state.updateSwimlaneBounds(laneId, { x: snap(position.x), y: snap(position.y), width: size.width, height: size.height });
+        }
+        const macroId = parseMacroFlowId(id);
+        if (macroId) state.updateMacroPosition(macroId, { x: snap(position.x), y: snap(position.y) });
+      }
+      const updates = [...starts.keys()]
+        .filter((id) => !id.startsWith("macro:") && !id.startsWith("swimlane:") && !parseTaskFlowId(id))
+        .filter((id) => {
+          const owner = state.graph.nodes.find((node) => node.id === id)?.workflowTaskId;
+          return !owner || !movedGroups.has(owner);
+        })
+        .map((id) => {
+          const item = controller.getNodeById(id);
+          const position = item?.getPosition();
+          return { id, position: { x: snap(position?.x ?? 0), y: snap(position?.y ?? 0) } };
+        });
+      if (updates.length) {
+        state.updateNodePositions(updates);
+        state.assignNodesToSwimlanes(updates.map((item) => item.id));
+      }
+      starts.clear();
+    };
+    controller.addEventListener(DRAG_NODE_START_EVENT, onStart);
+    controller.addEventListener(DRAG_NODE_EVENT, onDrag);
+    controller.addEventListener(DRAG_NODE_END_EVENT, onEnd);
+    return () => {
+      controller.removeEventListener(DRAG_NODE_START_EVENT, onStart);
+      controller.removeEventListener(DRAG_NODE_EVENT, onDrag);
+      controller.removeEventListener(DRAG_NODE_END_EVENT, onEnd);
+    };
+  }, [controller]);
 
   useEffect(() => {
     if (!focusNodeId) return;
-    const graph = useProjectStore.getState().graph;
-    const task = graph.workflow.tasks.find(t => t.id === parseTaskFlowId(focusNodeId));
-    if (task) { void setCenter(task.engineeringBounds.x + task.engineeringBounds.width / 2, task.engineeringBounds.y + task.engineeringBounds.height / 2, { zoom: 0.65, duration: 250 }); return; }
-    const node = graph.nodes.find((item) => item.id === focusNodeId);
-    if (!node) return;
-    const macroId = collapsedMacroIndexes.hiddenByMacro.get(node.id);
-    if (macroId) {
-      const macro = collapsedMacroIndexes.byId.get(macroId);
-      if (macro) {
-        const position = macroPosition(macro);
-        void setCenter(position.x + 110, position.y + 40, {
-          zoom: Math.max(getZoom(), 0.9),
-          duration: 400,
-        });
-        return;
-      }
+    const current = useProjectStore.getState().graph;
+    const taskId = parseTaskFlowId(focusNodeId);
+    const task = taskId ? current.workflow.tasks.find((item) => item.id === taskId) : undefined;
+    if (task) {
+      centerGraph(controller.getGraph(), task.engineeringBounds.x + task.engineeringBounds.width / 2, task.engineeringBounds.y + task.engineeringBounds.height / 2, 0.65);
+      return;
     }
-    void setCenter(node.position.x + 110, node.position.y + 40, {
-      zoom: Math.max(getZoom(), 0.9),
-      duration: 400,
-    });
-  }, [collapsedMacroIndexes, focusNodeId, getZoom, setCenter]);
+    const hidden = current.macroBlocks.find((macro) => macro.collapsed && macro.nodeIds.includes(focusNodeId));
+    const targetId = hidden ? macroFlowId(hidden.id) : focusNodeId;
+    const node = controller.getNodeById(targetId);
+    if (!node) return;
+    const bounds = node.getBounds();
+    centerGraph(controller.getGraph(), bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, 0.9);
+  }, [controller, focusNodeId, model]);
 
   useEffect(() => {
     if (!focusEdgeId) return;
-    const graph = useProjectStore.getState().graph;
-    const edge = graph.edges.find((item) => item.id === focusEdgeId);
-    if (!edge) return;
-    const source = graph.nodes.find((node) => node.id === edge.sourceNodeId);
-    const target = graph.nodes.find((node) => node.id === edge.targetNodeId);
+    const edge = controller.getEdgeById(focusEdgeId);
+    const source = edge?.getSource();
+    const target = edge?.getTarget();
     if (!source || !target) return;
-    void setCenter(
-      (source.position.x + target.position.x) / 2 + 110,
-      (source.position.y + target.position.y) / 2 + 40,
-      { zoom: Math.max(getZoom(), 0.85), duration: 400 },
+    const left = source.getBounds();
+    const right = target.getBounds();
+    centerGraph(
+      controller.getGraph(),
+      (left.x + left.width / 2 + right.x + right.width / 2) / 2,
+      (left.y + left.height / 2 + right.y + right.height / 2) / 2,
+      0.85,
     );
-  }, [focusEdgeId, getZoom, setCenter]);
-
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      useConnectionDraftStore.getState().clearDraft();
-      if (
-        !connection.source ||
-        !connection.target ||
-        !connection.sourceHandle ||
-        !connection.targetHandle
-      ) {
-        return;
-      }
-      if (
-        connection.source.startsWith("macro:") ||
-        connection.target.startsWith("macro:") ||
-        connection.source.startsWith("swimlane:") ||
-        connection.target.startsWith("swimlane:")
-      ) {
-        return;
-      }
-      connectPorts({
-        sourceNodeId: connection.source,
-        sourcePortId: connection.sourceHandle,
-        targetNodeId: connection.target,
-        targetPortId: connection.targetHandle,
-      });
-    },
-    [connectPorts],
-  );
-
-  const isValidConnection = useCallback(
-    (connection: Connection | Edge) => {
-      if (
-        !connection.source ||
-        !connection.target ||
-        !connection.sourceHandle ||
-        !connection.targetHandle
-      ) {
-        return false;
-      }
-      if (
-        connection.source.startsWith("macro:") ||
-        connection.target.startsWith("macro:") ||
-        connection.source.startsWith("swimlane:") ||
-        connection.target.startsWith("swimlane:")
-      ) {
-        return false;
-      }
-      const decision = evaluateConnection({
-        nodes: useProjectStore.getState().graph.nodes,
-        edges: useProjectStore.getState().graph.edges.filter(edge => edge.id !== reconnectingEdge.current),
-        sourceNodeId: connection.source,
-        sourcePortId: connection.sourceHandle,
-        targetNodeId: connection.target,
-        targetPortId: connection.targetHandle,
-      });
-      return decision.ok;
-    },
-    [],
-  );
-
-  const onConnectStart = useCallback(
-    (
-      _event: MouseEvent | TouchEvent,
-      params: { nodeId: string | null; handleId: string | null; handleType: "source" | "target" | null },
-    ) => {
-      if (!params.nodeId || !params.handleId || !params.handleType) {
-        useConnectionDraftStore.getState().clearDraft();
-        return;
-      }
-      const node = useProjectStore
-        .getState()
-        .graph.nodes.find((item) => item.id === params.nodeId);
-      if (!node) {
-        useConnectionDraftStore.getState().clearDraft();
-        return;
-      }
-      const port =
-        params.handleType === "source"
-          ? node.outputs.find((item) => item.id === params.handleId)
-          : node.inputs.find((item) => item.id === params.handleId);
-      if (!port) {
-        useConnectionDraftStore.getState().clearDraft();
-        return;
-      }
-      useConnectionDraftStore.getState().setDraft({
-        nodeId: node.id,
-        handleId: port.id,
-        handleType: params.handleType,
-        contractType: port.contractType,
-      });
-    },
-    [],
-  );
-
-  const onConnectEnd = useCallback((_event: MouseEvent | TouchEvent, state: FinalConnectionState) => {
-    const reason = rejectedConnectionReason(state, reconnectingEdge.current ?? undefined);
-    if (reason) setConnectionError(reason);
-    useConnectionDraftStore.getState().clearDraft();
-  }, [setConnectionError]);
-
-  const onSelectionChange = useCallback(
-    ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
-      const edgeIds = selectedEdges
-        .map((edge) => edge.id)
-        .filter((id) => !id.startsWith("portal-bus-"));
-      // Prefer connection-only selection when the user clicked an edge so Delete
-      // removes wires without also removing their endpoint nodes.
-      if (edgeIds.length > 0 && selectedNodes.length === 0) {
-        setSelection([], edgeIds);
-        return;
-      }
-      setSelection(
-        selectedNodes
-          .map((node) => node.id)
-          .filter((id) => !id.startsWith("swimlane:")),
-        edgeIds,
-      );
-    },
-    [setSelection],
-  );
-
-  const onEdgeClick = useCallback(
-    (event: ReactMouseEvent, edge: Edge) => {
-      if (edge.id.startsWith("portal-bus-")) return;
-      event.stopPropagation();
-      setSelection([], [edge.id]);
-    },
-    [setSelection],
-  );
-
-  const onNodeDragStart: OnNodeDrag = useCallback(() => {
-    beginGesture();
-  }, [beginGesture]);
-
-  const onNodeDragStop: OnNodeDrag = useCallback(
-    (_event, _node, nodesSnapshot) => {
-      const movedGroups = new Set(nodesSnapshot.map(n => parseTaskFlowId(n.id)).filter(Boolean));
-      for (const item of nodesSnapshot) {
-        const taskId = parseTaskFlowId(item.id);
-        if (taskId) moveTaskGroup(taskId, item.position.x, item.position.y);
-        const macroId = parseMacroFlowId(item.id);
-        if (macroId) updateMacroPosition(macroId, item.position);
-        const laneId = parseSwimlaneFlowId(item.id);
-        if (laneId) updateSwimlaneBounds(laneId, { x: item.position.x, y: item.position.y, width: Number(item.style?.width ?? 480), height: Number(item.style?.height ?? 640) });
-      }
-      const architectureUpdates = nodesSnapshot
-        .filter(
-          (item) =>
-            !item.id.startsWith("macro:") && !item.id.startsWith("swimlane:") && !parseTaskFlowId(item.id) && !movedGroups.has(graph.nodes.find(n => n.id === item.id)?.workflowTaskId ?? null),
-        )
-        .map((item) => ({
-          id: item.id,
-          position: item.position,
-        }));
-      if (architectureUpdates.length > 0) {
-        updateNodePositions(architectureUpdates);
-        assignNodesToSwimlanes(architectureUpdates.map((item) => item.id));
-      }
-    },
-    [assignNodesToSwimlanes, updateNodePositions, updateMacroPosition, updateSwimlaneBounds, moveTaskGroup, graph.nodes],
-  );
+  }, [controller, focusEdgeId, model]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable ||
-          target.tagName === "SELECT")
-      ) {
-        return;
-      }
-
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable || target.tagName === "SELECT")) return;
       const meta = event.metaKey || event.ctrlKey;
+      const store = useProjectStore.getState();
       if (meta && event.key.toLowerCase() === "z" && !event.shiftKey) {
         event.preventDefault();
-        undo();
+        store.undo();
         return;
       }
-      if (
-        meta &&
-        (event.key.toLowerCase() === "y" ||
-          (event.key.toLowerCase() === "z" && event.shiftKey))
-      ) {
+      if (meta && (event.key.toLowerCase() === "y" || (event.key.toLowerCase() === "z" && event.shiftKey))) {
         event.preventDefault();
-        redo();
+        store.redo();
         return;
       }
       if (meta && event.key.toLowerCase() === "d") {
         event.preventDefault();
-        duplicateNodes(
-          useSelectionStore
-            .getState()
-            .selectedNodeIds.filter((id) => !id.startsWith("macro:")),
-        );
+        store.duplicateNodes(useSelectionStore.getState().selectedNodeIds.filter((id) => !id.startsWith("macro:")));
         return;
       }
       if (event.key === "Escape") {
         usePendingDeleteStore.getState().cancelDelete();
         useConnectionDraftStore.getState().clearDraft();
         useSelectionStore.getState().clearSelection();
+        setDraftLine(null);
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
         const selection = useSelectionStore.getState();
-        const nodeIds = [...new Set(selection.selectedNodeIds.flatMap(id => {
+        const nodeIds = [...new Set(selection.selectedNodeIds.flatMap((id) => {
           const macroId = parseMacroFlowId(id);
-          if (macroId) return useProjectStore.getState().graph.macroBlocks.find(m => m.id === macroId)?.nodeIds ?? [];
+          if (macroId) return store.graph.macroBlocks.find((macro) => macro.id === macroId)?.nodeIds ?? [];
           return id.startsWith("swimlane:") ? [] : [id];
         }))];
-        const edgeIds = selection.selectedEdgeIds.filter(
-          (id) => !id.startsWith("portal-bus-"),
-        );
+        const edgeIds = selection.selectedEdgeIds.filter((id) => !id.startsWith("portal-bus-"));
         if (edgeIds.length > 0 && nodeIds.length === 0) {
-          // Edge selection always deletes connections only — never endpoint nodes.
           event.preventDefault();
           usePendingDeleteStore.getState().requestDelete([], edgeIds);
           return;
@@ -655,110 +305,172 @@ function CanvasInner() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [duplicateNodes, redo, undo]);
+  }, []);
 
-  useEffect(() => {
-    if (!nodesInitialized || initialFit.current) return;
-    initialFit.current = true;
-    if (graph.viewport.x === 0 && graph.viewport.y === 0 && graph.viewport.zoom === 1) {
-      void fitView({ padding: 0.16, maxZoom: 1 });
+  const buttons = useMemo(
+    () => createTopologyControlButtons({
+      ...defaultControlButtonsOptions,
+      legend: false,
+      zoomInCallback: () => controller.getGraph().scaleBy(1.2),
+      zoomOutCallback: () => controller.getGraph().scaleBy(1 / 1.2),
+      fitToScreenCallback: () => {
+        controller.getGraph().setScale(1);
+        controller.getGraph().fit(64);
+      },
+      resetViewCallback: () => {
+        const surface = controller.getGraph();
+        surface.setScale(1);
+        surface.setPosition(new Point(0, 0));
+      },
+    }),
+    [controller],
+  );
+
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    const hit = portFromTarget(event.target);
+    if (hit) {
+      if (hit.nodeId.startsWith("macro:") || hit.nodeId.startsWith("swimlane:") || hit.nodeId.startsWith("workflow-task:")) return;
+      const node = useProjectStore.getState().graph.nodes.find((item) => item.id === hit.nodeId);
+      const port = hit.direction === "output"
+        ? node?.outputs.find((item) => item.id === hit.portId)
+        : node?.inputs.find((item) => item.id === hit.portId);
+      if (!node || !port) return;
+      event.stopPropagation();
+      const selectedEdge = useSelectionStore.getState().selectedEdgeIds[0];
+      const existing = useProjectStore.getState().graph.edges.find((edge) => edge.id === selectedEdge);
+      const reconnectEdgeId = existing && (
+        (existing.sourceNodeId === hit.nodeId && existing.sourcePortId === hit.portId) ||
+        (existing.targetNodeId === hit.nodeId && existing.targetPortId === hit.portId)
+      ) ? existing.id : null;
+      useConnectionDraftStore.getState().setDraft({
+        nodeId: node.id,
+        handleId: port.id,
+        handleType: hit.direction === "output" ? "source" : "target",
+        contractType: port.contractType,
+      });
+      const origin = { nodeId: node.id, portId: port.id, direction: hit.direction, contractType: port.contractType as ContractType, reconnectEdgeId };
+      const move = (ev: PointerEvent) => {
+        const rect = hostRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        setDraftLine({ x1: event.clientX - rect.left, y1: event.clientY - rect.top, x2: ev.clientX - rect.left, y2: ev.clientY - rect.top });
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        setDraftLine(null);
+        useConnectionDraftStore.getState().clearDraft();
+        const drop = portFromPoint(ev.clientX, ev.clientY);
+        finishConnection(origin, drop);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      return;
     }
-  }, [nodesInitialized, fitView, graph.viewport]);
+    const target = event.target as Element;
+    if (event.button === 0 && target.tagName === "rect" && !target.closest("[data-kind='node']")) {
+      const start = { x: event.clientX, y: event.clientY };
+      const move = (ev: PointerEvent) => {
+        const rect = hostRef.current?.getBoundingClientRect();
+        if (!rect) return;
+        setBox({ x: start.x - rect.left, y: start.y - rect.top, x2: ev.clientX - rect.left, y2: ev.clientY - rect.top });
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        setBox(null);
+        const svg = hostRef.current?.querySelector("svg");
+        if (!svg || Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 6) return;
+        const a = clientToGraph(controller.getGraph(), svg, start.x, start.y);
+        const b = clientToGraph(controller.getGraph(), svg, ev.clientX, ev.clientY);
+        const left = Math.min(a.x, b.x);
+        const top = Math.min(a.y, b.y);
+        const right = Math.max(a.x, b.x);
+        const bottom = Math.max(a.y, b.y);
+        const ids = controller.getGraph().getNodes()
+          .filter((node) => !node.getId().startsWith("swimlane:"))
+          .filter((node) => {
+            const bounds = node.getBounds();
+            return bounds.x < right && bounds.x + bounds.width > left && bounds.y < bottom && bounds.y + bounds.height > top;
+          })
+          .map((node) => node.getId());
+        useSelectionStore.getState().setSelection(ids, []);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    }
+  };
 
   return (
-    <div className="relative h-full w-full">
-      <ReactFlow
-        nodes={flowNodes}
-        edges={flowEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onReconnectStart={(_event, edge) => { reconnectingEdge.current = edge.id; }}
-        onReconnect={(edge, connection) => {
-          if (connection.sourceHandle && connection.targetHandle) reconnectPorts(edge.id, { sourceNodeId: connection.source, sourcePortId: connection.sourceHandle, targetNodeId: connection.target, targetPortId: connection.targetHandle });
-        }}
-        onReconnectEnd={(_event, edge, _handleType, state) => {
-          const reason = rejectedConnectionReason(state, edge.id);
-          if (reason) setConnectionError(reason);
-          reconnectingEdge.current = null;
-          useConnectionDraftStore.getState().clearDraft();
-        }}
-        edgesReconnectable
-        reconnectRadius={18}
-        connectionRadius={24}
-        nodeTypes={architectureNodeTypes}
-        onConnect={onConnect}
-        isValidConnection={isValidConnection}
-        onConnectStart={onConnectStart}
-        onConnectEnd={onConnectEnd}
-        onSelectionChange={onSelectionChange}
-        onNodeClick={(event, node) => {
-          if (node.id.startsWith("swimlane:")) return;
-          setSelection(event.shiftKey ? [...new Set([...useSelectionStore.getState().selectedNodeIds, node.id])] : [node.id]);
-        }}
-        onEdgeClick={onEdgeClick}
-        onNodeDragStart={onNodeDragStart}
-        onNodeDragStop={onNodeDragStop}
-        onMove={(_event, viewport) => setLod(lodFromZoom(viewport.zoom))}
-        onMoveEnd={(_event, viewport) =>
-          setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })
-        }
-        snapToGrid
-        snapGrid={[16, 16]}
-        multiSelectionKeyCode="Shift"
-        deleteKeyCode={null}
-        edgesFocusable
-        elementsSelectable
-        selectionOnDrag
-        panOnScroll
-        panOnScrollMode={PanOnScrollMode.Free}
-        zoomOnScroll={false}
-        panOnDrag={[1]}
-        panActivationKeyCode="Space"
-        onlyRenderVisibleElements
-        minZoom={0.1}
-        maxZoom={2}
-        defaultViewport={graph.viewport}
-        defaultEdgeOptions={{ interactionWidth: 28 }}
-        proOptions={{ hideAttribution: true }}
-        aria-label="Architecture canvas"
-      >
-        <Background gap={16} size={1} color="#d6d3d1" />
-        {!lowResourceMode && <MiniMap pannable zoomable />}
-        <Controls showInteractive />
-      </ReactFlow>
-
-      <div className="pointer-events-none absolute left-3 top-3 rounded border border-[var(--athanor-mist)] bg-white/90 px-2 py-1 text-[11px] text-[var(--athanor-slate)] shadow-sm">
-        {lodLabel(lod)} · zoom {(graph.viewport.zoom * 100).toFixed(0)}%
-      </div>
-      <div className="pointer-events-none absolute right-3 top-3 rounded border border-[var(--athanor-mist)] bg-white/90 px-2 py-1 text-[11px] text-[var(--athanor-slate)] shadow-sm">
-        Scroll to pan · Space + drag or middle mouse to pan · Controls to zoom
-      </div>
-
-      {connectionError && (
-        <div
-          role="alert"
-          className="absolute bottom-4 left-1/2 z-10 w-[min(36rem,calc(100%-2rem))] -translate-x-1/2 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm shadow"
+    <div ref={hostRef} className="athanor-topology" onPointerDown={onPointerDown}>
+      <VisualizationProvider controller={controller}>
+        <TopologyView
+          aria-label="Architecture canvas"
+          viewToolbar={<span className="athanor-topology__meta">{lodLabel(lod)} · zoom {(zoom * 100).toFixed(0)}%</span>}
+          contextToolbar={<span className="athanor-topology__meta">Scroll to pan · Space + drag or middle mouse to pan · Controls to zoom</span>}
+          controlBar={<TopologyControlBar controlButtons={buttons} />}
         >
-          <div className="flex items-start justify-between gap-3">
-            <p>{connectionError}</p>
-            <button
-              type="button"
-              className="shrink-0 text-xs underline"
-              onClick={() => clearConnectionError()}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
+          <VisualizationSurface />
+        </TopologyView>
+      </VisualizationProvider>
+      {draftLine && (
+        <svg className="athanor-topology__overlay" aria-hidden>
+          <line x1={draftLine.x1} y1={draftLine.y1} x2={draftLine.x2} y2={draftLine.y2} />
+        </svg>
+      )}
+      {box && (
+        <div
+          className="athanor-topology__box"
+          style={{
+            left: Math.min(box.x, box.x2),
+            top: Math.min(box.y, box.y2),
+            width: Math.abs(box.x2 - box.x),
+            height: Math.abs(box.y2 - box.y),
+          }}
+        />
+      )}
+      {connectionError && (
+        <Alert className="athanor-topology__alert" variant="danger" title="Connection rejected" isInline actionClose={<AlertActionCloseButton onClose={() => useProjectStore.getState().clearConnectionError()} />}>
+          {connectionError}
+        </Alert>
       )}
     </div>
   );
 }
 
-export function ArchitectureCanvas() {
-  return (
-    <ReactFlowProvider>
-      <CanvasInner />
-    </ReactFlowProvider>
-  );
+function finishConnection(
+  origin: { nodeId: string; portId: string; direction: "input" | "output"; reconnectEdgeId: string | null },
+  drop: { nodeId: string; portId: string; direction: "input" | "output" } | null,
+) {
+  const store = useProjectStore.getState();
+  if (!drop || drop.nodeId === origin.nodeId && drop.portId === origin.portId) return;
+  if (drop.nodeId.startsWith("macro:") || drop.nodeId.startsWith("swimlane:") || origin.nodeId.startsWith("macro:")) {
+    store.setConnectionError(REJECTED);
+    return;
+  }
+  const forward = origin.direction === "output";
+  const sourceNodeId = forward ? origin.nodeId : drop.nodeId;
+  const sourcePortId = forward ? origin.portId : drop.portId;
+  const targetNodeId = forward ? drop.nodeId : origin.nodeId;
+  const targetPortId = forward ? drop.portId : origin.portId;
+  if ((forward ? drop.direction : origin.direction) !== "input" || (forward ? origin.direction : drop.direction) !== "output") {
+    store.setConnectionError(REJECTED);
+    return;
+  }
+  const decision = evaluateConnection({
+    nodes: store.graph.nodes,
+    edges: store.graph.edges.filter((edge) => edge.id !== origin.reconnectEdgeId),
+    sourceNodeId,
+    sourcePortId,
+    targetNodeId,
+    targetPortId,
+  });
+  if (!decision.ok) {
+    store.setConnectionError(decision.reason);
+    return;
+  }
+  if (origin.reconnectEdgeId) {
+    store.reconnectPorts(origin.reconnectEdgeId, { sourceNodeId, sourcePortId, targetNodeId, targetPortId });
+    return;
+  }
+  store.connectPorts({ sourceNodeId, sourcePortId, targetNodeId, targetPortId });
 }
